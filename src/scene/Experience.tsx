@@ -10,6 +10,7 @@ import { advance, fk, onEvent, useUI } from '../store';
 import { LOW_GPU, MAX_DPR } from './Adaptive';
 import { Cargo } from './Cargo';
 import { Exhaust } from './Exhaust';
+import { Fx } from './Fx';
 import { ForkliftModel, carriageWorld, truck } from './Forklift';
 import { Overlay } from './Overlay';
 import { Port } from './Port';
@@ -17,6 +18,15 @@ import { Port } from './Port';
 /** Camera look offsets, changed by mouse drags, the wheel and the gamepad's right stick. */
 const look = { yaw: 0, pitch: 0.32, dist: 14, cabYaw: 0, cabPitch: -0.12 };
 if (import.meta.env.DEV) (globalThis as unknown as { look: typeof look }).look = look;
+
+function DevInfo() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  useEffect(() => {
+    if (import.meta.env.DEV) Object.assign(globalThis, { gl, scene });
+  }, [gl, scene]);
+  return null;
+}
 
 function Driver() {
   useEffect(() => onEvent(playEvent), []);
@@ -172,7 +182,7 @@ export function Experience() {
     <Canvas shadows dpr={[1, MAX_DPR]} camera={{ position: [10, 8, 28], fov: 50, near: 0.1, far: 900 }} gl={{ antialias: true }}>
       <color attach="background" args={[night ? '#05070c' : '#bcd6ea']} />
       <fog attach="fog" args={[night ? '#05070c' : '#c7d6e0', 90, 420]} />
-      {night ? <Stars radius={300} depth={60} count={2500} factor={6} fade /> : <Sky sunPosition={[40, 16, 30]} turbidity={7} rayleigh={1.6} mieCoefficient={0.006} mieDirectionalG={0.85} />}
+      {night ? <Stars radius={300} depth={60} count={2500} factor={6} fade /> : <Sky sunPosition={[40, 16, 30]} turbidity={3.5} rayleigh={0.9} mieCoefficient={0.004} mieDirectionalG={0.8} />}
       <hemisphereLight args={[night ? '#1c2640' : '#dbe9ff', night ? '#0b0b0c' : '#5d5547', night ? 0.18 : 0.9]} />
       <SunFollow night={night} />
       {/* image-based lighting rendered once from simple light shapes (no download): reflections on paint, glass and chrome */}
@@ -187,9 +197,11 @@ export function Experience() {
       <ForkliftModel />
       <Cargo />
       <Exhaust />
+      <Fx />
       <Overlay />
       <CameraRig />
       <Driver />
+      <DevInfo />
       <EffectComposer>
         {hq ? <N8AO aoRadius={1.2} intensity={2} distanceFalloff={0.6} halfRes quality="performance" aoSamples={10} denoiseSamples={4} /> : <></>}
         <Bloom mipmapBlur luminanceThreshold={1.15} intensity={night ? 1.1 : 0.35} />

@@ -11,6 +11,7 @@ import { EDGE_INFO, carriageToBody, forkCentres } from '../sim/forklift';
 import { SPEC } from '../sim/spec';
 import { fk } from '../store';
 import { Box, Cyl, M, Pipe, useCanvasTexture } from './parts';
+import { Bake } from './Bake';
 import { FORK_TYRE, Wheel } from './tyre';
 
 type V2 = [number, number];
@@ -281,60 +282,109 @@ function Frame() {
 // ---------- cab ----------
 
 function Cab() {
+  // Toyota full-floating steel cab: thick green pillars, tinted glass all round in black rubber seals, a wide-view
+  // lower windscreen, rain-gutter roof with visor, door on the left. Sits on the floor pod on rubber mounts.
   const z0 = -1.88;
   const z1 = 0.08;
-  const y0 = 1.47;
-  const y1 = SPEC.guardH - 0.1;
+  const y0 = 1.5;
+  const y1 = SPEC.guardH - 0.12;
   const w = 0.86;
   const zc = (z0 + z1) / 2;
-  const post = (x: number, z: number) => <RB key={`${x}${z}`} s={[0.085, y1 - y0, 0.085]} r={0.025} m={M.cab} position={[x, (y0 + y1) / 2, z]} />;
+  const belt = y0 + 0.58; // window sill
+  const zb = -0.82; // B pillar: the door is ahead of it
+  const T = 0.11; // pillar size
+  // a glass pane in the plane x = const (side) or z = const (front/back), with its rubber seal
+  const pane = (k: string, axis: 'x' | 'z', at: number, a0: number, a1: number, b0: number, b1: number) => {
+    const ca = (a0 + a1) / 2;
+    const cb = (b0 + b1) / 2;
+    const la = a1 - a0;
+    const lb = b1 - b0;
+    const onX = axis === 'x';
+    return (
+      <group key={k}>
+        <Box s={onX ? [0.012, lb, la] : [la, lb, 0.012]} m={M.glass} position={onX ? [at, cb, ca] : [ca, cb, at]} />
+        {[b0, b1].map((b) => (
+          <Box key={`h${b}`} s={onX ? [0.03, 0.03, la] : [la, 0.03, 0.03]} m={M.seal} position={onX ? [at, b, ca] : [ca, b, at]} />
+        ))}
+        {[a0, a1].map((a) => (
+          <Box key={`v${a}`} s={[0.03, lb, 0.03]} m={M.seal} position={onX ? [at, cb, a] : [a, cb, at]} />
+        ))}
+      </group>
+    );
+  };
+  const mounts: [number, number][] = [];
+  for (const z of [z0 + 0.15, z1 - 0.15]) for (const sd of [-1, 1]) mounts.push([sd * (w - 0.1), z]);
   return (
     <group>
-      <RB s={[w * 2 + 0.1, 0.12, z1 - z0 + 0.1]} r={0.03} m={M.cab} position={[0, y0, zc]} />
-      {post(w, z1 - 0.05)}
-      {post(-w, z1 - 0.05)}
-      {post(w, z0)}
-      {post(-w, z0)}
-      {post(w, zc - 0.25)}
-      {/* roof with guard bars */}
-      <RB s={[w * 2 + 0.2, 0.1, z1 - z0 + 0.24]} r={0.04} m={M.cab} position={[0, y1 + 0.04, zc]} />
-      {[-0.5, 0, 0.5].map((x) => (
-        <RB key={x} s={[0.05, 0.05, z1 - z0]} r={0.015} m={M.cab} position={[x, y1 + 0.12, zc]} />
+      {/* floor pod and rubber mounts */}
+      <RB s={[w * 2 + 0.12, 0.14, z1 - z0 + 0.12]} r={0.04} m={M.cab} position={[0, y0 - 0.02, zc]} />
+      {mounts.map(([x, z]) => (
+        <Cyl key={x * 10 + z} r={0.06} l={0.06} m={M.rubber} position={[x, y0 - 0.11, z]} />
       ))}
-      {/* glass: front with a wiper, sides (the left one is the door), rear */}
-      <Box s={[w * 2 - 0.06, y1 - y0 - 0.32, 0.015]} m={M.glass} position={[0, (y0 + y1) / 2 + 0.12, z1 - 0.04]} />
-      <Box s={[0.015, 0.62, 0.02]} m={M.black} position={[0.25, 2.25, z1 - 0.02]} rotation={[0, 0, 0.6]} />
-      <Box s={[w * 2 - 0.06, y1 - y0 - 0.26, 0.015]} m={M.glass} position={[0, (y0 + y1) / 2 + 0.08, z0]} />
+      {/* pillars A (front), B (door), C (rear); lower side panels, sill and roof rails */}
       {[-1, 1].map((sd) => (
         <group key={sd}>
-          <Box s={[0.015, y1 - y0 - 0.22, z1 - z0 - 0.1]} m={M.glass} position={[sd * w, (y0 + y1) / 2 + 0.06, zc]} />
-          <Box s={[0.02, 0.45, z1 - z0 - 0.1]} m={M.cab} position={[sd * (w + 0.005), y0 + 0.28, zc]} />
+          <RB s={[T, y1 - y0, T]} r={0.03} m={M.cab} position={[sd * w, (y0 + y1) / 2, z1 - T / 2]} />
+          <RB s={[T, y1 - y0, T]} r={0.03} m={M.cab} position={[sd * w, (y0 + y1) / 2, z0 + T / 2]} />
+          <RB s={[T * 0.8, y1 - y0, T * 0.8]} r={0.025} m={M.cab} position={[sd * w, (y0 + y1) / 2, zb]} />
+          <RB s={[0.05, belt - y0, z1 - z0 - 0.04]} r={0.02} m={M.cab} position={[sd * w, (y0 + belt) / 2, zc]} />
+          <RB s={[0.07, 0.06, z1 - z0]} r={0.02} m={M.cab} position={[sd * w, belt, zc]} />
+          <RB s={[0.07, 0.08, z1 - z0]} r={0.02} m={M.cab} position={[sd * w, y1 - 0.04, zc]} />
         </group>
       ))}
-      <Box s={[0.03, 0.04, 0.16]} m={M.chrome} position={[w + 0.02, 2.15, -1.45]} />
-      {[1.9, 2.9].map((y) => (
-        <Box key={y} s={[0.04, 0.09, 0.05]} m={M.mast} position={[w + 0.02, y, -0.35]} />
+      <Box s={[0.012, belt - y0 - 0.06, 0.01]} m={M.seal} position={[w + 0.028, (y0 + belt) / 2, zb + 0.03]} />
+      {/* front header, the rail over the wide-view lower glass, rear frame and lower rear panel */}
+      <RB s={[w * 2, 0.1, T]} r={0.03} m={M.cab} position={[0, y1 - 0.05, z1 - T / 2]} />
+      <RB s={[w * 2, 0.07, 0.08]} r={0.02} m={M.cab} position={[0, belt + 0.05, z1 - 0.04]} />
+      <RB s={[w * 2, 0.1, T]} r={0.03} m={M.cab} position={[0, y1 - 0.05, z0 + T / 2]} />
+      <RB s={[w * 2, 0.5, 0.06]} r={0.02} m={M.cab} position={[0, y0 + 0.27, z0 + 0.03]} />
+      {pane('f1', 'z', z1 - 0.05, -w + T / 2, w - T / 2, belt + 0.09, y1 - 0.1)}
+      {pane('f2', 'z', z1 - 0.05, -w + T / 2, w - T / 2, y0 + 0.1, belt + 0.01)}
+      {pane('r1', 'z', z0 + 0.05, -w + T / 2, w - T / 2, y0 + 0.55, y1 - 0.1)}
+      {[-1, 1].map((sd) => (
+        <group key={sd}>
+          {pane(`a${sd}`, 'x', sd * w, zb + 0.06, z1 - T, belt + 0.04, y1 - 0.09)}
+          {pane(`b${sd}`, 'x', sd * w, z0 + T, zb - 0.06, belt + 0.04, y1 - 0.09)}
+        </group>
+      ))}
+      {/* wipers */}
+      <group position={[0.1, belt + 0.12, z1 + 0.005]}>
+        <Box s={[0.02, 0.62, 0.012]} m={M.black} position={[0.16, 0.24, 0]} rotation={[0, 0, -0.65]} />
+        <Cyl r={0.025} l={0.04} axis="z" m={M.black} />
+      </group>
+      <Box s={[0.018, 0.5, 0.012]} m={M.black} position={[-0.13, y0 + 1.1, z0 - 0.005]} rotation={[0, 0, 0.65]} />
+      {/* door handle and hinges */}
+      <Box s={[0.035, 0.04, 0.16]} m={M.chrome} position={[w + 0.035, belt - 0.12, zb + 0.2]} />
+      {[y0 + 0.35, y1 - 0.35].map((y) => (
+        <Box key={y} s={[0.045, 0.1, 0.05]} m={M.mast} position={[w + 0.03, y, z1 - 0.13]} />
+      ))}
+      {/* roof: rain gutter, visor, guard bars */}
+      <RB s={[w * 2 + 0.24, 0.12, z1 - z0 + 0.26]} r={0.05} m={M.cab} position={[0, y1 + 0.06, zc]} />
+      <RB s={[w * 2 + 0.1, 0.05, z1 - z0 + 0.1]} r={0.02} m={M.cabDark} position={[0, y1 + 0.145, zc]} />
+      <RB s={[w * 2 + 0.2, 0.03, 0.22]} r={0.012} m={M.cab} position={[0, y1 - 0.02, z1 + 0.1]} rotation={[0.18, 0, 0]} />
+      {[-0.55, 0, 0.55].map((x) => (
+        <RB key={x} s={[0.05, 0.05, z1 - z0 - 0.1]} r={0.015} m={M.cab} position={[x, y1 + 0.2, zc]} />
       ))}
       {/* mirrors on arms */}
       {[-1, 1].map((sd) => (
-        <group key={sd} position={[sd * (w + 0.36), 2.55, z1 + 0.05]}>
-          <Cyl r={0.015} l={0.4} axis="x" m={M.mast} position={[-sd * 0.2, 0, 0]} />
-          <RB s={[0.22, 0.3, 0.05]} r={0.02} m={M.mast} />
-          <Box s={[0.19, 0.27, 0.005]} m={M.chrome} position={[0, 0, -0.028]} />
+        <group key={sd} position={[sd * (w + 0.38), belt + 0.4, z1 + 0.05]}>
+          <Cyl r={0.016} l={0.42} axis="x" m={M.mast} position={[-sd * 0.21, 0, 0]} />
+          <RB s={[0.22, 0.32, 0.05]} r={0.02} m={M.mast} />
+          <Box s={[0.19, 0.29, 0.005]} m={M.chrome} position={[0, 0, -0.028]} />
         </group>
       ))}
       {/* beacon, work lights, antenna */}
-      <group position={[0, y1 + 0.17, z0 + 0.35]}>
+      <group position={[0, y1 + 0.2, z0 + 0.35]}>
         <Cyl r={0.09} l={0.04} m={M.mast} />
         <Cyl r={0.07} r2={0.08} l={0.14} m={M.amberLight} position={[0, 0.09, 0]} />
       </group>
       {[-1, 1].map((sd) => (
-        <group key={sd} position={[sd * 0.62, y1 + 0.17, z1 - 0.06]}>
-          <RB s={[0.17, 0.13, 0.11]} r={0.03} m={M.mast} />
-          <Cyl r={0.05} l={0.02} axis="z" m={M.lens} position={[0, 0, 0.06]} />
+        <group key={sd} position={[sd * 0.66, y1 + 0.21, z1 + 0.02]}>
+          <RB s={[0.18, 0.14, 0.12]} r={0.03} m={M.mast} />
+          <Cyl r={0.055} l={0.02} axis="z" m={M.lens} position={[0, 0, 0.065]} />
         </group>
       ))}
-      <Cyl r={0.006} l={0.5} m={M.black} position={[-0.75, y1 + 0.35, z0 + 0.1]} />
+      <Cyl r={0.006} l={0.5} m={M.black} position={[-0.75, y1 + 0.4, z0 + 0.1]} />
       {/* inside: seat, dash, steering, levers, pedals */}
       <group position={[0, y0 + 0.06, -1.0]}>
         <RB s={[0.56, 0.14, 0.52]} r={0.05} m={M.seat} position={[0, 0.47, 0]} />
@@ -370,7 +420,7 @@ function SteeringWheel() {
   const ref = useRef<THREE.Group>(null);
   useFrame(() => (ref.current!.rotation.z = -fk.steer * 3.2));
   return (
-    <group position={[0, 0.8, -0.42]} rotation={[-0.9, 0, 0]}>
+    <group position={[0, 0.8, -0.42]} rotation={[-0.9, 0, 0]} userData={{ noBake: true }}>
       <group ref={ref}>
         <mesh material={M.black}>
           <torusGeometry args={[0.2, 0.02, 10, 36]} />
@@ -486,6 +536,7 @@ function Mast() {
   return (
     <group position={[0, SPEC.pivot.y, SPEC.pivot.z]}>
       <group ref={tiltRef}>
+        <Bake>
         {/* outer mast */}
         {[-1, 1].map((s) => (
           <Mesh key={s} geo={outerGeo} m={M.mast} position={[s * 0.66, -0.5, zf - 0.33]} />
@@ -506,6 +557,7 @@ function Mast() {
             <Cyl r={0.12} l={0.08} m={M.steel} position={[s * 0.32, 2.2, zf - 0.58]} />
           </group>
         ))}
+        </Bake>
         <group ref={rodRef}>
           {[-1, 1].map((s) => (
             <group key={s}>
@@ -516,6 +568,7 @@ function Mast() {
         </group>
         {/* inner mast with its chain and hose sheaves */}
         <group ref={innerRef}>
+          <Bake>
           {[-1, 1].map((s) => (
             <Mesh key={s} geo={innerGeo} m={M.mast} position={[s * 0.5, -0.45, zf - 0.31]} />
           ))}
@@ -527,12 +580,14 @@ function Mast() {
           {[-0.12, 0.12].map((x) => (
             <Box key={x} s={[0.035, outerH - 0.4, 0.035]} m={M.black} position={[x, outerH / 2 - 0.25, zf - 0.44]} />
           ))}
+          </Bake>
         </group>
         <Chain x={0.36} z={zf - 0.2} />
         <Chain x={-0.36} z={zf - 0.2} />
         {/* carriage: hook bars, side plates, load backrest grille; forks on the hook-type positioner */}
         <group ref={carRef}>
           <group ref={heelRef} position={[0, 0, zf]}>
+            <Bake>
             <RB s={[2.95, 0.2, 0.17]} r={0.03} m={M.mast} position={[0, 1.02, -0.11]} />
             <RB s={[2.95, 0.18, 0.17]} r={0.03} m={M.mast} position={[0, 0.25, -0.11]} />
             <Cyl r={0.05} l={2.98} axis="x" m={M.chrome} position={[0, 1.02, 0]} />
@@ -547,12 +602,13 @@ function Mast() {
             <RB s={[2.75, 0.08, 0.08]} r={0.02} m={M.mast} position={[0, 2.0, -0.12]} />
             <RB s={[2.75, 0.06, 0.06]} r={0.02} m={M.mast} position={[0, 1.55, -0.12]} />
             {[0, 1].map((i) => (
-              <group key={i} ref={(el) => el && (forkRefs.current[i] = el)}>
+              <group key={i} ref={(el) => el && (forkRefs.current[i] = el)} userData={{ noBake: true }}>
                 <Mesh geo={forkGeo} m={M.fork} />
                 <RB s={[SPEC.forkW + 0.04, 0.13, 0.13]} r={0.03} m={M.fork} position={[0, 1.02, -0.02]} />
                 <Box s={[0.05, 0.08, 0.06]} m={M.mast} position={[0, 1.12, -0.06]} />
               </group>
             ))}
+            </Bake>
           </group>
         </group>
       </group>
@@ -650,8 +706,10 @@ export function ForkliftModel({ children }: { children?: ReactNode }) {
       <group ref={tipOuter}>
         <group ref={tipRot}>
           <group ref={tipInner}>
-            <Frame />
-            <Cab />
+            <Bake>
+              <Frame />
+              <Cab />
+            </Bake>
             <Wheels />
             <Mast />
             <Lights />

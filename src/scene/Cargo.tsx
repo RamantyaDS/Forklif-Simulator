@@ -7,6 +7,7 @@ import { SPEC } from '../sim/spec';
 import { GENSET } from '../sim/world';
 import { fk } from '../store';
 import { carriage } from './Forklift';
+import { Bake } from './Bake';
 import { Genset } from './genset/Genset';
 
 /** Centre-of-gravity symbol (quartered disc) painted on both base-frame rails, as on heavy lifted equipment. */
@@ -71,8 +72,10 @@ export function Cargo() {
   });
   return (
     <group ref={ref} matrixAutoUpdate={false}>
-      <Genset />
-      <CgMarks />
+      <Bake>
+        <Genset />
+        <CgMarks />
+      </Bake>
     </group>
   );
 }

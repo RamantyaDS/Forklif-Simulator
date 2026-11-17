@@ -167,7 +167,32 @@ async function build(c: AudioContext) {
   }
   const beep = osc('square', 1150); // reverse beeper
   const alarm = osc('square', 2600); // stability / overload alarm
-  return { startB, stopB, nb, engineBus, tone, idle, mid, synth, synthG, turbo, conv, hyd, relief, tyre, hornG, beep, alarm };
+  // tyre squeal: a narrow, wobbling band of noise; forks scraping: gritty high band with a rattle
+  const squeal = noiseLoop('bandpass', 2100, 9);
+  const squealLfo = c.createOscillator();
+  squealLfo.frequency.value = 7;
+  const squealDepth = c.createGain();
+  squealDepth.gain.value = 220;
+  squealLfo.connect(squealDepth).connect(squeal.f.frequency);
+  squealLfo.start();
+  const scrape = noiseLoop('bandpass', 3400, 2.5);
+  const scrapeAm = c.createOscillator();
+  scrapeAm.type = 'square';
+  scrapeAm.frequency.value = 23;
+  const scrapeDepth = c.createGain();
+  scrapeDepth.gain.value = 0;
+  scrapeAm.connect(scrapeDepth).connect(scrape.g.gain);
+  scrapeAm.start();
+  // port ambience: wind over the yard and water lapping at the quay wall (slow swell)
+  const wind = noiseLoop('lowpass', 420, 0.5);
+  const water = noiseLoop('bandpass', 650, 0.8);
+  const swell = c.createOscillator();
+  swell.frequency.value = 0.18;
+  const swellDepth = c.createGain();
+  swellDepth.gain.value = 0;
+  swell.connect(swellDepth).connect(water.g.gain);
+  swell.start();
+  return { startB, stopB, nb, engineBus, tone, idle, mid, synth, synthG, turbo, conv, hyd, relief, tyre, hornG, beep, alarm, squeal, scrape, scrapeDepth, wind, water, swellDepth };
 }
 
 // After the user has asked for sound, every interaction retries: creating the AudioContext failed on the first
@@ -338,7 +363,57 @@ export function playEvent(e: string) {
     burst(700, 0.5, 0.9, 1.8, 'lowpass', 0.01);
     burst(3500, 1, 0.35, 1.2);
   } else if (e === 'done') clunk(1500, 0.2, 0.1);
+  else if (e === 'forkTouch') {
+    clunk(1100, 0.35, 0.09);
+    burst(2600, 3, 0.08, 0.15);
+  }
 }
+
+/** A distant ship horn: two low reeds, slow attack and long fade. */
+function shipHorn() {
+  if (!ctx || !N) return;
+  const t = ctx.currentTime;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.05, t + 0.4);
+  g.gain.setValueAtTime(0.05, t + 2.6);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 4.2);
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 500;
+  g.connect(lp).connect(master);
+  for (const f of [73, 110]) {
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = f;
+    o.connect(g);
+    o.start(t);
+    o.stop(t + 4.3);
+  }
+}
+
+/** Gulls: a few falling chirps. */
+function gulls() {
+  if (!ctx || !N) return;
+  const t0 = ctx.currentTime;
+  const n = 2 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const t = t0 + i * (0.28 + Math.random() * 0.15);
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(2300 + Math.random() * 300, t);
+    o.frequency.exponentialRampToValueAtTime(1300, t + 0.22);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.02, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    o.connect(g).connect(master);
+    o.start(t);
+    o.stop(t + 0.3);
+  }
+}
+let nextHorn = 25;
+let nextGull = 8;
 
 let rattleT = 0;
 /** Per-frame update; `distance` from the camera to the truck, `inCab` for the muffled cab view. */
@@ -403,4 +478,23 @@ export function updateSound(distance: number, inCab: boolean) {
   k(N.beep.g.gain, beepOn ? 0.05 * near : 0, 0.005);
   const warn = fk.assists.sas && !fk.tipped && fk.risk > 0.8 && Math.sin(t * Math.PI * 2 * 4) > 0;
   k(N.alarm.g.gain, warn ? 0.03 : 0, 0.005);
+
+  // tyres at the grip limit, forks dragging
+  k(N.squeal.g.gain, fk.squeal * 0.09 * near * cab, 0.05);
+  k(N.scrape.g.gain, fk.scrape * 0.09 * near, 0.04);
+  k(N.scrapeDepth.gain, fk.scrape * 0.05 * near, 0.04);
+  k(N.scrape.f.frequency, 2600 + fk.scrape * 1600, 0.1);
+
+  // ambience: always there, the water louder near the quay; a ship horn and gulls now and then
+  const quay = Math.max(0, Math.min(1, 1 - (fk.z + 30) / 40));
+  k(N.wind.g.gain, 0.025 * cab, 0.5);
+  k(N.swellDepth.gain, 0.02 + 0.05 * quay, 0.5);
+  if (t > nextHorn) {
+    nextHorn = t + 70 + Math.random() * 80;
+    shipHorn();
+  }
+  if (t > nextGull) {
+    nextGull = t + 12 + Math.random() * 25;
+    gulls();
+  }
 }

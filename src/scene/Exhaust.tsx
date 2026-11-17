@@ -37,6 +37,7 @@ export function Exhaust() {
     return { geo, mat, parts };
   }, []);
   const soot = useRef(0);
+  const lastRpm = useRef(0);
   const acc = useRef(0);
   const next = useRef(0);
   const at = useMemo(() => new THREE.Vector3(), []);
@@ -47,19 +48,23 @@ export function Exhaust() {
     at.copy(LOCAL);
     truck.obj?.localToWorld(at);
     soot.current = Math.max(0, soot.current - dt * 0.8);
+    // a quick rise in engine speed (throttle stab) puffs black for a moment
+    const rise = (fk.rpm - lastRpm.current) / Math.max(dt, 1e-3);
+    lastRpm.current = fk.rpm;
+    if (rise > 900) soot.current = Math.min(1, soot.current + dt * 4);
     if (fk.engine === 'running') {
       const lug = Math.max(0, fk.load - 0.75) * 3;
-      acc.current += (8 + 25 * fk.load + 40 * soot.current) * dt;
+      acc.current += (22 + 40 * fk.load + 60 * soot.current) * dt;
       while (acc.current > 1) {
         acc.current -= 1;
         const p = parts[next.current];
         next.current = (next.current + 1) % N;
         p.p.copy(at);
-        p.v.set((Math.random() - 0.5) * 0.3, 2.5 + 3 * (fk.rpm / 2300), (Math.random() - 0.5) * 0.3);
+        p.v.set((Math.random() - 0.5) * 0.6, 1.4 + 1.8 * (fk.rpm / 2300), (Math.random() - 0.5) * 0.6);
         p.age = 0;
-        p.life = 2 + Math.random() * 1.5;
+        p.life = 2.5 + Math.random() * 1.5;
         p.dark = Math.min(1, soot.current + lug);
-        p.s = 0.15 + Math.random() * 0.1;
+        p.s = 0.22 + Math.random() * 0.12;
       }
     }
     const pos = geo.attributes.position.array as Float32Array;
@@ -76,9 +81,9 @@ export function Exhaust() {
       }
       const t = Math.min(1, p.age / p.life);
       pos.set([p.p.x, p.p.y, p.p.z], i * 3);
-      sz[i] = p.s * (1 + t * 7);
-      al[i] = t >= 1 ? 0 : (1 - t) * (0.06 + 0.55 * p.dark);
-      sh[i] = 0.6 - 0.5 * p.dark + t * 0.15;
+      sz[i] = p.s * (1 + t * 6);
+      al[i] = t >= 1 ? 0 : (1 - t) * Math.min(1, p.age * 14) * (0.07 + 0.38 * p.dark);
+      sh[i] = 0.55 - 0.45 * p.dark + t * 0.12;
     });
     for (const k of ['position', 'size', 'alpha', 'shade']) geo.attributes[k].needsUpdate = true;
   });

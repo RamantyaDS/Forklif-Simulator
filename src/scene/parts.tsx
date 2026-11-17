@@ -7,15 +7,15 @@ import * as THREE from 'three';
 export const M = {
   // Toyota heavy-forklift livery (Traknus photos): yellow-orange body, dark green cab and skirts, black mast
   // painted steel with a clear coat, so the environment shows in the panels
-  body: new THREE.MeshPhysicalMaterial({ color: '#f0a01e', metalness: 0.15, roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.35 }),
+  body: new THREE.MeshStandardMaterial({ color: '#f0a01e', metalness: 0.2, roughness: 0.36 }),
   bodyDark: new THREE.MeshStandardMaterial({ color: '#c97c12', metalness: 0.3, roughness: 0.5 }),
-  cab: new THREE.MeshPhysicalMaterial({ color: '#1d4637', metalness: 0.2, roughness: 0.45, clearcoat: 0.5, clearcoatRoughness: 0.4 }),
+  cab: new THREE.MeshStandardMaterial({ color: '#1d4637', metalness: 0.25, roughness: 0.4 }),
   mast: new THREE.MeshStandardMaterial({ color: '#1a1c1e', metalness: 0.5, roughness: 0.55 }),
   fork: new THREE.MeshStandardMaterial({ color: '#e8961a', metalness: 0.3, roughness: 0.55 }),
-  rimPaint: new THREE.MeshPhysicalMaterial({ color: '#1f2123', metalness: 0.4, roughness: 0.5, clearcoat: 0.3 }),
+  rimPaint: new THREE.MeshStandardMaterial({ color: '#1f2123', metalness: 0.45, roughness: 0.45 }),
   pipe: new THREE.MeshStandardMaterial({ color: '#3a3532', metalness: 0.7, roughness: 0.55 }),
   checker: new THREE.MeshStandardMaterial({ color: '#7d8186', metalness: 0.8, roughness: 0.4 }),
-  lens: new THREE.MeshPhysicalMaterial({ color: '#ffffff', emissive: '#fff3d6', emissiveIntensity: 0.3, roughness: 0.05, transmission: 0, clearcoat: 1 }),
+  lens: new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#fff3d6', emissiveIntensity: 0.3, roughness: 0.05 }),
   chain: new THREE.MeshStandardMaterial({ color: '#5d6166', metalness: 0.9, roughness: 0.35 }),
   steelDark: new THREE.MeshStandardMaterial({ color: '#3b3e42', metalness: 0.7, roughness: 0.45, side: THREE.DoubleSide }),
   redLamp: new THREE.MeshStandardMaterial({ color: '#7a0d0d', emissive: '#ff1a0a', emissiveIntensity: 0.1 }),
@@ -43,7 +43,10 @@ export const M = {
   white: new THREE.MeshStandardMaterial({ color: '#eceeee', metalness: 0.15, roughness: 0.4 }),
   steel: new THREE.MeshStandardMaterial({ color: '#9aa0a5', metalness: 0.85, roughness: 0.3 }),
   chrome: new THREE.MeshStandardMaterial({ color: '#d7dadc', metalness: 1, roughness: 0.15 }),
-  glass: new THREE.MeshStandardMaterial({ color: '#1d2b33', metalness: 0.9, roughness: 0.05, transparent: true, opacity: 0.35, depthWrite: false }),
+  // tinted cab glass: dark, glossy, partly see-through, picks up the environment reflections
+  glass: new THREE.MeshStandardMaterial({ color: '#22323b', metalness: 0.85, roughness: 0.04, transparent: true, opacity: 0.58, depthWrite: false, envMapIntensity: 1.6 }),
+  seal: new THREE.MeshStandardMaterial({ color: '#0c0c0d', roughness: 0.85 }),
+  cabDark: new THREE.MeshStandardMaterial({ color: '#163629', metalness: 0.25, roughness: 0.5 }),
   amber: new THREE.MeshStandardMaterial({ color: '#ffae1a', emissive: '#ff8a00', emissiveIntensity: 0.4 }),
   lamp: new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 1.5 }),
   seat: new THREE.MeshStandardMaterial({ color: '#2a2c2f', metalness: 0, roughness: 0.85 }),

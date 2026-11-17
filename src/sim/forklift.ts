@@ -86,6 +86,8 @@ export interface Forklift {
   pressure: number; // lift circuit, bar
   relief: boolean;
   hydFlow: number; // 0..1 how hard the pump is working (for sound)
+  scrape: number; // 0..1 forks dragging on the ground or the deck
+  squeal: number; // 0..1 tyres at their grip limit (hard braking or a fast tight turn)
   // stability
   cg: { x: number; y: number; z: number };
   proj: { x: number; z: number };
@@ -170,6 +172,8 @@ export function create(assists?: Partial<Assists>): Forklift {
     pressure: 0,
     relief: false,
     hydFlow: 0,
+    scrape: 0,
+    squeal: 0,
     cg: { x: 0, y: 0, z: 0 },
     proj: { x: 0, z: 0 },
     risk: 0,
@@ -428,7 +432,11 @@ function hydraulics(f: Forklift, dt: number) {
         setDown(f, rest);
       }
     }
-    if (forkFloor(f, next) < 0) next = f.lift; // forks on the deck, a timber or the ground
+    if (forkFloor(f, next) < 0) {
+      // forks on the deck, a timber or the ground
+      if (forkFloor(f, f.lift) > 0.003) f.events.push('forkTouch');
+      next = f.lift;
+    }
     f.lift = next;
     f.pressure = staticBar * 0.9;
   } else f.pressure = on || f.lift > 0.01 ? staticBar : 0;
@@ -681,6 +689,11 @@ function drive(f: Forklift, dt: number) {
   const nx = f.x + Math.sin(f.heading) * v * dt;
   const nz = f.z + Math.cos(f.heading) * v * dt;
   const hit = v !== 0 || yawRate !== 0 ? hitAt(f, nx, nz, nh) : null;
+  // forks dragging along whatever they rest on; tyres at the grip limit
+  f.scrape = Math.abs(v) > 0.15 && forkFloor(f, f.lift) < 0.01 ? Math.min(1, Math.abs(v) / 2.5) : 0;
+  const lateral = Math.abs(v * yawRate);
+  const decel = Math.max(0, -f.accel * Math.sign(f.v || 1));
+  f.squeal = clamp(Math.max((lateral - 2.2) / 2, (decel - 3.2) / 2), 0, 1);
   if (hit) {
     if (Math.abs(f.v) > 0.6) {
       f.bumps++;

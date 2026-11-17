@@ -9,6 +9,7 @@ import { CRANE, LIGHTS, PAD, QUAY_Z, STACKS, TIMBERS, TRUCK, onDeck } from '../s
 import { fk, useUI } from '../store';
 import { Box, Cyl, M, useCanvasTexture } from './parts';
 import { TRUCK_TYRE, Wheel as TruckWheel } from './tyre';
+import { Bake } from './Bake';
 
 function Ground() {
   const tex = useCanvasTexture(
@@ -359,6 +360,7 @@ function Truck() {
   return (
     <group>
       <group ref={deck}>
+        <Bake>
         {/* deck plate, side rails with stake pockets, cross members below */}
         <Box s={[len, 0.06, hz * 2]} m={M.deckPlate} position={[(x0 + x1) / 2, deckTop - 0.03, 0]} />
         {[-1, 1].map((s) => (
@@ -380,7 +382,9 @@ function Truck() {
         <Text position={[x0 - 0.13, 1.25, 0]} rotation={[0, -Math.PI / 2, 0]} fontSize={0.16} color="#f2c21c">
           MUATAN BERAT
         </Text>
+        </Bake>
       </group>
+      <Bake>
       {/* tri-axle bogie, landing legs */}
       {[-7.9, -6.6, -5.3].map((x) =>
         [-1, 1].map((s) => [0.66, 1.0].map((zz) => <Wheel key={`${x}${s}${zz}`} x={x} z={s * zz} />)),
@@ -406,6 +410,7 @@ function Truck() {
           [-1, 1].map((s) => (i === 0 ? [1.05] : [0.66, 1.0]).map((zz) => <Wheel key={`${x}${s}${zz}`} x={x} z={s * zz} />)),
         )}
       </group>
+      </Bake>
     </group>
   );
 }
@@ -452,14 +457,16 @@ export function Port() {
   return (
     <group>
       <Ground />
-      <Markings />
-      <Quay />
       <Containers />
-      <Ship />
-      <StsCrane />
-      <Warehouse />
-      <LightTowers />
-      <Fence />
+      <Bake>
+        <Markings />
+        <Quay />
+        <Ship />
+        <StsCrane />
+        <Warehouse />
+        <LightTowers />
+        <Fence />
+      </Bake>
       <Truck />
       <Timbers />
     </group>
