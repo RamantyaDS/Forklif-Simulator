@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { CRANE, LIGHTS, PAD, QUAY_Z, STACKS, TIMBERS, TRUCK, onDeck } from '../sim/world';
 import { fk, useUI } from '../store';
 import { Box, Cyl, M, useCanvasTexture } from './parts';
+import { TRUCK_TYRE, Wheel as TruckWheel } from './tyre';
 
 function Ground() {
   const tex = useCanvasTexture(
@@ -334,11 +335,11 @@ function Fence() {
   );
 }
 
-function Wheel({ x, z, r = 0.52, w = 0.3 }: { x: number; z: number; r?: number; w?: number }) {
+/** A truck wheel: the axle runs along z here, so the shared wheel (axis x) is turned a quarter. */
+function Wheel({ x, z }: { x: number; z: number }) {
   return (
-    <group position={[x, r, z]}>
-      <Cyl r={r} l={w} axis="z" m={M.rubber} />
-      <Cyl r={r * 0.55} l={w + 0.02} axis="z" m={M.rim} />
+    <group position={[x, TRUCK_TYRE.R - 0.015, z]} rotation={[0, Math.PI / 2, 0]}>
+      <TruckWheel spec={TRUCK_TYRE} rim={M.rim} side={z > 0 ? -1 : 1} />
     </group>
   );
 }

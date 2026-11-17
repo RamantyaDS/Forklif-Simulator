@@ -1,4 +1,4 @@
-import { OrbitControls, Sky, Stars } from '@react-three/drei';
+import { Environment, Lightformer, OrbitControls, Sky, Stars } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Bloom, EffectComposer, N8AO } from '@react-three/postprocessing';
 import { useEffect, useMemo, useRef } from 'react';
@@ -16,6 +16,7 @@ import { Port } from './Port';
 
 /** Camera look offsets, changed by mouse drags, the wheel and the gamepad's right stick. */
 const look = { yaw: 0, pitch: 0.32, dist: 14, cabYaw: 0, cabPitch: -0.12 };
+if (import.meta.env.DEV) (globalThis as unknown as { look: typeof look }).look = look;
 
 function Driver() {
   useEffect(() => onEvent(playEvent), []);
@@ -174,6 +175,14 @@ export function Experience() {
       {night ? <Stars radius={300} depth={60} count={2500} factor={6} fade /> : <Sky sunPosition={[40, 16, 30]} turbidity={7} rayleigh={1.6} mieCoefficient={0.006} mieDirectionalG={0.85} />}
       <hemisphereLight args={[night ? '#1c2640' : '#dbe9ff', night ? '#0b0b0c' : '#5d5547', night ? 0.18 : 0.9]} />
       <SunFollow night={night} />
+      {/* image-based lighting rendered once from simple light shapes (no download): reflections on paint, glass and chrome */}
+      <Environment resolution={256} frames={1} environmentIntensity={night ? 0.15 : 0.7}>
+        <Lightformer form="rect" intensity={night ? 0.3 : 1.6} color="#dceaf7" scale={[60, 20, 1]} position={[0, 18, 0]} rotation={[Math.PI / 2, 0, 0]} />
+        <Lightformer form="rect" intensity={night ? 0.2 : 1.2} color="#bfd3e6" scale={[40, 6, 1]} position={[0, 4, -30]} />
+        <Lightformer form="rect" intensity={night ? 0.2 : 0.9} color="#e7dcc8" scale={[40, 6, 1]} position={[0, 4, 30]} rotation={[0, Math.PI, 0]} />
+        <Lightformer form="circle" intensity={night ? 0 : 6} color="#fff0d6" scale={6} position={[30, 14, 22]} target={[0, 0, 0]} />
+        <Lightformer form="rect" intensity={0.35} color="#6b6458" scale={[80, 80, 1]} position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]} />
+      </Environment>
       <Port />
       <ForkliftModel />
       <Cargo />
@@ -183,7 +192,7 @@ export function Experience() {
       <Driver />
       <EffectComposer>
         {hq ? <N8AO aoRadius={1.2} intensity={2} distanceFalloff={0.6} halfRes quality="performance" aoSamples={10} denoiseSamples={4} /> : <></>}
-        <Bloom mipmapBlur luminanceThreshold={1} intensity={night ? 1.1 : 0.6} />
+        <Bloom mipmapBlur luminanceThreshold={1.15} intensity={night ? 1.1 : 0.35} />
       </EffectComposer>
     </Canvas>
   );

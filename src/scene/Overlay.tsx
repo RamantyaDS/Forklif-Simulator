@@ -20,12 +20,12 @@ export function Overlay() {
   const { lineGeo, lineMat, fillMat, fillGeo, dotMat } = useMemo(() => {
     const pts = [...TRIANGLE, TRIANGLE[0]].map(([x, z]) => new THREE.Vector3(x, 0.03, z));
     const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
-    const lineMat = new THREE.LineBasicMaterial({ color: SAFE, transparent: true, opacity: 0.95, depthTest: false });
+    const lineMat = new THREE.LineBasicMaterial({ color: SAFE, transparent: true, opacity: 0.95 });
     const fillGeo = new THREE.BufferGeometry().setFromPoints(TRIANGLE.map(([x, z]) => new THREE.Vector3(x, 0.025, z)));
     fillGeo.setIndex([0, 2, 1]);
     fillGeo.computeVertexNormals();
     const fillMat = new THREE.MeshBasicMaterial({ color: SAFE, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
-    const dotMat = new THREE.MeshBasicMaterial({ color: SAFE, depthTest: false, transparent: true, opacity: 0.85 });
+    const dotMat = new THREE.MeshBasicMaterial({ color: SAFE, transparent: true, opacity: 0.85 });
     return { lineGeo, lineMat, fillMat, fillGeo, dotMat };
   }, []);
   const col = useMemo(() => new THREE.Color(), []);
