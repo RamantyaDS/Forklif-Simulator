@@ -397,7 +397,7 @@ function Cab() {
       </group>
       <group position={[0, y0 + 0.06, -0.15]}>
         <RB s={[1.3, 0.55, 0.24]} r={0.04} m={M.cab} position={[0, 0.27, 0.07]} />
-        <Cyl r={0.05} l={0.5} m={M.mast} position={[0, 0.6, -0.18]} rotation={[-0.45, 0, 0]} />
+        <Cyl r={0.05} l={0.5} m={M.mast} position={[0, 0.605, -0.265]} rotation={[-0.67, 0, 0]} />
         <SteeringWheel />
         <Box s={[0.42, 0.15, 0.05]} m={M.dash} position={[0, 0.66, -0.1]} rotation={[-0.4, 0, 0]} />
         {[0, 1, 2, 3].map((i) => (
@@ -420,7 +420,7 @@ function SteeringWheel() {
   const ref = useRef<THREE.Group>(null);
   useFrame(() => (ref.current!.rotation.z = -fk.steer * 3.2));
   return (
-    <group position={[0, 0.8, -0.42]} rotation={[-0.9, 0, 0]} userData={{ noBake: true }}>
+    <group position={[0, 0.8, -0.42]} rotation={[0.9, 0, 0]} userData={{ noBake: true }}>
       <group ref={ref}>
         <mesh material={M.black}>
           <torusGeometry args={[0.2, 0.02, 10, 36]} />
@@ -429,7 +429,7 @@ function SteeringWheel() {
           <Box key={a} s={[0.022, 0.2, 0.016]} m={M.black} position={[Math.sin(a) * 0.1, Math.cos(a) * 0.1, 0]} rotation={[0, 0, -a]} />
         ))}
         <Cyl r={0.05} l={0.05} axis="z" m={M.black} />
-        <Cyl r={0.025} l={0.06} axis="z" m={M.black} position={[0.14, -0.1, 0.02]} />
+        <Cyl r={0.025} l={0.06} axis="z" m={M.black} position={[0.14, -0.1, -0.04]} />
       </group>
     </group>
   );
