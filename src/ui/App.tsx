@@ -1,6 +1,7 @@
 import { useEffect, type PointerEvent as RPointerEvent } from 'react';
 import { CAMS, KEYS, PAD_KEYS, bindKeys, pad, toggleEngine, touch } from '../input';
 import { Experience } from '../scene/Experience';
+import { FULL, setQuality } from '../scene/Adaptive';
 import { finishP2h, setDir, togglePark, type Assists } from '../sim/forklift';
 import { CARGOS } from '../sim/cargo';
 import { JOB, JOBS } from '../sim/jobs';
@@ -117,6 +118,14 @@ function Panel() {
           {soundOn() ? '🔊 Suara' : '🔇 Bisu'}
         </button>
         <button onClick={() => ui.set({ help: !ui.help })}>⌨ Tombol</button>
+      </div>
+      <div className="row">
+        <button className={!FULL ? 'on' : ''} onClick={() => FULL && setQuality(false)} title="Resolusi 1×, tanpa ambient occlusion dan bloom: lancar di laptop">
+          Grafis ringan
+        </button>
+        <button className={FULL ? 'on' : ''} onClick={() => !FULL && setQuality(true)} title="Resolusi tinggi, ambient occlusion, bloom, bayangan tajam (halaman dimuat ulang)">
+          Mode penuh
+        </button>
       </div>
       {ui.started && !soundStatus.ok && soundStatus.text.startsWith('gagal') && <p className="snd bad">Suara: {soundStatus.text}</p>}
     </aside>

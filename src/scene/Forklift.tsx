@@ -643,19 +643,24 @@ function Wheels() {
   };
   return (
     <group>
-      {/* front duals: the outer wheel shows its face, the inner one is mounted the other way round */}
-      {[-1, 1].map((s) =>
-        (
-          [
-            [0.95, -1],
-            [1.34, 1],
-          ] as const
-        ).map(([x, face]) => (
-          <group key={`${s}${x}`} position={[s * x, R, 0]} ref={keep(spin.current)}>
-            <Wheel spec={FORK_TYRE} side={(s * face) as 1 | -1} />
-          </group>
-        )),
-      )}
+      {/* front duals: the outer wheel shows its face, the inner one is mounted the other way round. All four turn
+          together on the drive axle, so they are baked into one spinning group (5 draws instead of 20). */}
+      <group position={[0, R, 0]} ref={keep(spin.current)}>
+        <Bake>
+          {[-1, 1].map((s) =>
+            (
+              [
+                [0.95, -1],
+                [1.34, 1],
+              ] as const
+            ).map(([x, face]) => (
+              <group key={`${s}${x}`} position={[s * x, 0, 0]}>
+                <Wheel spec={FORK_TYRE} side={(s * face) as 1 | -1} />
+              </group>
+            )),
+          )}
+        </Bake>
+      </group>
       <Cyl r={0.17} l={1.5} axis="x" m={M.mast} position={[0, R, 0]} />
       {/* rear steer axle with its centre pivot */}
       <RB s={[2.1, 0.24, 0.28]} r={0.05} m={M.mast} position={[0, R, -WB]} />
@@ -663,7 +668,9 @@ function Wheels() {
       {[-1, 1].map((s) => (
         <group key={s} position={[s * 1.25, R, -WB]} ref={keep(knuckle.current)}>
           <group ref={keep(spin.current)}>
-            <Wheel spec={FORK_TYRE} side={s as 1 | -1} />
+            <Bake>
+              <Wheel spec={FORK_TYRE} side={s as 1 | -1} />
+            </Bake>
           </group>
         </group>
       ))}

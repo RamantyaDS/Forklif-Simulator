@@ -145,9 +145,13 @@ export function useWheelGeo(s: TyreSpec) {
   }, [key]);
 }
 
-/** Sidewall lettering: a transparent disc texture with the size and ply rating written around the circle. */
+/** Sidewall lettering: a transparent disc texture with the size and ply rating written around the circle. One
+ * material per size, shared by every wheel, so a baked truck draws all its labels at once. */
+const labels = new Map<string, THREE.Material>();
 function useLabel(text: string) {
   return useMemo(() => {
+    const hit = labels.get(text);
+    if (hit) return hit;
     const c = document.createElement('canvas');
     c.width = c.height = 512;
     const g = c.getContext('2d')!;
@@ -169,7 +173,9 @@ function useLabel(text: string) {
     }
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    const m = new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 });
+    labels.set(text, m);
+    return m;
   }, [text]);
 }
 
@@ -186,9 +192,8 @@ export function Wheel({ spec, rim = M.rimPaint, side = 1 }: { spec: TyreSpec; ri
       <mesh geometry={g.rim} material={rim} castShadow />
       <mesh geometry={g.nuts} material={M.steel} />
       <mesh geometry={g.holes} material={HOLE} />
-      <mesh position={[spec.W / 2 + 0.003, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh position={[spec.W / 2 + 0.003, 0, 0]} rotation={[0, Math.PI / 2, 0]} material={label}>
         <planeGeometry args={[spec.R * 2, spec.R * 2]} />
-        <meshStandardMaterial map={label} transparent depthWrite={false} roughness={0.9} polygonOffset polygonOffsetFactor={-2} />
       </mesh>
     </group>
   );

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { JOB } from '../sim/jobs';
 import { CARGO_START, CONES, LOAD, PAD, SUPPORTS, TIMBERS, onDeck } from '../sim/world';
 import { fk, useUI } from '../store';
+import { Bake } from './Bake';
 import { LoadModel } from './Cargo';
 import { Box, M, useCanvasTexture } from './parts';
 import { weather } from './weather';
@@ -90,7 +91,7 @@ function Target() {
   }
   return (
     <group position={[PAD.x, 0, PAD.z]} rotation={[0, PAD.yaw, 0]}>
-      {lines}
+      <Bake shadows={false}>{lines}</Bake>
       {onGround && PAD.label && (
         <Text position={[0, 0.012, d / 2 + 0.7]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.55} color="#e8c21c" fontWeight={700}>
           {PAD.label}
@@ -216,7 +217,7 @@ function Course() {
   return (
     <group>
       {/* finish box */}
-      {[line(fin.x, fin.z - 1.8, 4, 0.12, 'f1'), line(fin.x, fin.z + 1.8, 4, 0.12, 'f2'), line(fin.x - 2, fin.z, 0.12, 3.6, 'f3'), line(fin.x + 2, fin.z, 0.12, 3.6, 'f4')]}
+      <Bake shadows={false}>{[line(fin.x, fin.z - 1.8, 4, 0.12, 'f1'), line(fin.x, fin.z + 1.8, 4, 0.12, 'f2'), line(fin.x - 2, fin.z, 0.12, 3.6, 'f3'), line(fin.x + 2, fin.z, 0.12, 3.6, 'f4')]}</Bake>
       <Text position={[fin.x, 0.012, fin.z + 2.5]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.6} color="#e9e9e4" fontWeight={700}>
         FINISH
       </Text>
@@ -257,6 +258,7 @@ export function JobProps() {
       <Course />
       {startOnGround && (
         <group position={[CARGO_START.x, 0, CARGO_START.z]} rotation={[0, CARGO_START.yaw, 0]}>
+          <Bake shadows={false}>
           {[
             [0, -LOAD.hz - 0.3, LOAD.hx * 2 + 0.72, 0.12],
             [0, LOAD.hz + 0.3, LOAD.hx * 2 + 0.72, 0.12],
@@ -267,6 +269,7 @@ export function JobProps() {
               <planeGeometry args={[sx, sz]} />
             </mesh>
           ))}
+          </Bake>
         </group>
       )}
     </group>

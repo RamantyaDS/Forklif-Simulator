@@ -7,7 +7,7 @@ import type { OrbitControls as OrbitImpl } from 'three-stdlib';
 import { applyHeld, padLook } from '../input';
 import { playEvent, updateSound } from '../sound';
 import { advance, fk, onEvent, useUI } from '../store';
-import { LOW_GPU, MAX_DPR } from './Adaptive';
+import { FULL, MAX_DPR, SHADOW } from './Adaptive';
 import { Cargo } from './Cargo';
 import { Exhaust } from './Exhaust';
 import { Fx } from './Fx';
@@ -66,7 +66,7 @@ function SunFollow({ night }: { night: boolean }) {
       intensity={night ? 0.25 : 3.1}
       color={night ? '#9fb3ff' : '#ffe2b8'}
       castShadow
-      shadow-mapSize={[2048, 2048]}
+      shadow-mapSize={[SHADOW, SHADOW]}
       shadow-camera-left={-22}
       shadow-camera-right={22}
       shadow-camera-top={22}
@@ -183,7 +183,7 @@ function CameraRig() {
 export function Experience() {
   const night = useUI((s) => s.night);
   const rain = useUI((s) => s.rain);
-  const hq = !LOW_GPU && typeof innerWidth === 'number' && innerWidth > 900;
+  const hq = FULL && typeof innerWidth === 'number' && innerWidth > 900;
   return (
     <Canvas shadows dpr={[1, MAX_DPR]} camera={{ position: [10, 8, 28], fov: 50, near: 0.1, far: 900 }} gl={{ antialias: true }}>
       <color attach="background" args={[night ? '#05070c' : '#bcd6ea']} />
@@ -192,7 +192,7 @@ export function Experience() {
       <hemisphereLight args={[night ? '#1c2640' : '#dbe9ff', night ? '#0b0b0c' : '#5d5547', night ? 0.18 : 0.9]} />
       <SunFollow night={night} />
       {/* image-based lighting rendered once from simple light shapes (no download): reflections on paint, glass and chrome */}
-      <Environment resolution={256} frames={1} environmentIntensity={night ? 0.15 : 0.7}>
+      <Environment resolution={FULL ? 256 : 128} frames={1} environmentIntensity={night ? 0.15 : 0.7}>
         <Lightformer form="rect" intensity={night ? 0.3 : 1.6} color="#dceaf7" scale={[60, 20, 1]} position={[0, 18, 0]} rotation={[Math.PI / 2, 0, 0]} />
         <Lightformer form="rect" intensity={night ? 0.2 : 1.2} color="#bfd3e6" scale={[40, 6, 1]} position={[0, 4, -30]} />
         <Lightformer form="rect" intensity={night ? 0.2 : 0.9} color="#e7dcc8" scale={[40, 6, 1]} position={[0, 4, 30]} rotation={[0, Math.PI, 0]} />
@@ -215,10 +215,14 @@ export function Experience() {
       <CameraRig />
       <Driver />
       <DevInfo />
-      <EffectComposer>
-        {hq ? <N8AO aoRadius={1.2} intensity={2} distanceFalloff={0.6} halfRes quality="performance" aoSamples={10} denoiseSamples={4} /> : <></>}
-        <Bloom mipmapBlur luminanceThreshold={1.15} intensity={night ? 1.1 : 0.35} />
-      </EffectComposer>
+      {FULL ? (
+        <EffectComposer>
+          {hq ? <N8AO aoRadius={1.2} intensity={2} distanceFalloff={0.6} halfRes quality="performance" aoSamples={10} denoiseSamples={4} /> : <></>}
+          <Bloom mipmapBlur luminanceThreshold={1.15} intensity={night ? 1.1 : 0.35} />
+        </EffectComposer>
+      ) : (
+        <></>
+      )}
     </Canvas>
   );
 }

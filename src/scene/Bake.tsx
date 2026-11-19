@@ -5,6 +5,41 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+/** Materials that look the same share one draw: many parts create their own material with identical settings. */
+const shared = new Map<string, THREE.Material>();
+function canonical(m: THREE.Material): THREE.Material {
+  const s = m as THREE.MeshStandardMaterial;
+  // only plain standard/basic materials without shader patches can be swapped safely
+  if (!(s.isMeshStandardMaterial || (m as THREE.MeshBasicMaterial).isMeshBasicMaterial) || m.onBeforeCompile.toString() !== THREE.Material.prototype.onBeforeCompile.toString()) return m;
+  const key = [
+    m.type,
+    s.color?.getHex(),
+    s.emissive?.getHex(),
+    s.emissiveIntensity,
+    s.roughness,
+    s.metalness,
+    s.map?.uuid,
+    s.alphaMap?.uuid,
+    s.normalMap?.uuid,
+    s.envMapIntensity,
+    m.transparent,
+    m.opacity,
+    m.side,
+    m.alphaTest,
+    m.depthWrite,
+    m.polygonOffset,
+    m.polygonOffsetFactor,
+    s.flatShading,
+    s.toneMapped,
+  ].join('|');
+  let c = shared.get(key);
+  if (!c) {
+    c = m;
+    shared.set(key, m);
+  }
+  return c;
+}
+
 export function Bake({ children, shadows = true }: { children: ReactNode; shadows?: boolean }) {
   const ref = useRef<THREE.Group>(null);
   useLayoutEffect(() => {
@@ -36,10 +71,11 @@ export function Bake({ children, shadows = true }: { children: ReactNode; shadow
               for (let k = 0; k < 2; k++) [u[j + 2 + k], u[j + 4 + k]] = [u[j + 4 + k], u[j + 2 + k]];
             }
           }
-          const e = groups.get(m.material) ?? { geos: [], cast: false };
+          const mat = canonical(m.material);
+          const e = groups.get(mat) ?? { geos: [], cast: false };
           e.geos.push(g);
           e.cast ||= m.castShadow;
-          groups.set(m.material, e);
+          groups.set(mat, e);
           done.push(m);
         }
         for (const c of o.children) visit(c);

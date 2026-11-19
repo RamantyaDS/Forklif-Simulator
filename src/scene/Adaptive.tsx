@@ -1,7 +1,25 @@
-// Graphics quality: the same as the site always had (up to 2× resolution, ambient occlusion on wide screens), fixed for
-// the whole session. Nothing switches quality while running: an automatic switch rebuilt every shader and render
-// target mid-session and froze the page on an integrated GPU. `?q=low` gives 1× resolution and no ambient occlusion
-// for a machine that needs it.
+// Graphics quality, fixed for the whole session (switching mid-session rebuilt every shader and froze an integrated
+// GPU in the genset simulator). Light mode is the default, as in the crane and excavator simulators: 1× resolution,
+// no ambient occlusion, no bloom, a 1024 shadow map; the models and textures are the same. "Mode penuh" (saved,
+// applied by reloading the page) gives up to 2× resolution, ambient occlusion on wide screens, bloom and a 2048
+// shadow map.
+const KEY = 'forklift-quality';
+function read() {
+  try {
+    return localStorage.getItem(KEY) === 'full';
+  } catch {
+    return false;
+  }
+}
+export const FULL = read() && new URLSearchParams(location.search).get('q') !== 'low';
+export const MAX_DPR = FULL ? Math.min(2, typeof devicePixelRatio === 'number' ? devicePixelRatio : 1) : 1;
+export const SHADOW = FULL ? 2048 : 1024;
 
-export const LOW_GPU = new URLSearchParams(location.search).get('q') === 'low';
-export const MAX_DPR = LOW_GPU ? 1 : Math.min(2, typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
+export function setQuality(full: boolean) {
+  try {
+    localStorage.setItem(KEY, full ? 'full' : 'light');
+  } catch {
+    /* private mode */
+  }
+  location.reload();
+}
