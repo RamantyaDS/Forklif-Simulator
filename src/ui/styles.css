@@ -615,3 +615,8 @@ input:focus-visible {
 .p2hcard .row { display: flex; gap: 8px; }
 .result .row { display: flex; gap: 10px; justify-content: center; }
 @media (max-width: 760px) { .p2hcard { bottom: 230px; right: 8px; } }
+
+/* full-mode performance warning */
+.fpswarn { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 60; display: flex; gap: 10px; align-items: center; max-width: min(720px, 94vw); background: rgba(40, 24, 10, 0.95); color: #ffe7c2; border: 1px solid #c77a1e; border-radius: 10px; padding: 10px 12px; font-size: 13.5px; line-height: 1.4; }
+.fpswarn button { flex: none; background: #f0a01e; color: #111; border: 0; border-radius: 7px; padding: 7px 10px; font: inherit; font-weight: 700; cursor: pointer; }
+.fpswarn .x { background: none; color: #ffe7c2; font-size: 18px; padding: 0 4px; }

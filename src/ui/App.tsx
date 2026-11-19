@@ -1,6 +1,7 @@
 import { useEffect, type PointerEvent as RPointerEvent } from 'react';
 import { CAMS, KEYS, PAD_KEYS, bindKeys, pad, toggleEngine, touch } from '../input';
 import { Experience } from '../scene/Experience';
+import { FpsWarn } from '../scene/FpsWarn';
 import { FULL, setQuality } from '../scene/Adaptive';
 import { finishP2h, setDir, togglePark, type Assists } from '../sim/forklift';
 import { CARGOS } from '../sim/cargo';
@@ -474,6 +475,7 @@ export function App() {
   return (
     <>
       <Experience />
+      <FpsWarn />
       <header className="brand">
         <button className="menu" onClick={() => useUI.getState().set({ panel: !panel })} aria-label={panel ? 'Sembunyikan panel' : 'Tampilkan panel'}>
           {panel ? '◀' : '☰'}
