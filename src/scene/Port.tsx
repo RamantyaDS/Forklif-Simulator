@@ -5,53 +5,129 @@ import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { CRANE, LIGHTS, PAD, QUAY_Z, STACKS, TIMBERS, TRUCK, onDeck } from '../sim/world';
+import { CRANE, LIGHTS, QUAY_Z, STACKS, TRUCK, onDeck } from '../sim/world';
 import { fk, useUI } from '../store';
 import { Box, Cyl, M, useCanvasTexture } from './parts';
 import { TRUCK_TYRE, Wheel as TruckWheel } from './tyre';
 import { Bake } from './Bake';
+import { weather } from './weather';
+
+weather(M.trailer, { dirt: 0.3, mudBelow: 1.2, mud: 0.6, chips: 0.25, rust: 0.25 });
+weather(M.deckPlate, { dirt: 0.45, mudBelow: 9, mud: 0.2, chips: 0, rust: 0.45, scale: 1.2 });
+weather(M.cabWhite, { dirt: 0.22, mudBelow: 1.5, mud: 0.6, chips: 0.1, scale: 1.2 });
+
+/** The apron material, shared with the weather (wet concrete is darker and glossier). */
+export const groundMat = new THREE.MeshStandardMaterial({ roughness: 0.92 });
 
 function Ground() {
+  // 12 m of concrete per tile: four 6 m slabs with sealed joints, aggregate, hairline cracks, a patched corner,
+  // oil drips and tyre marks; a large-scale grime pattern in the shader breaks up the repeat
   const tex = useCanvasTexture(
-    512,
-    512,
+    1024,
+    1024,
     (g) => {
-      g.fillStyle = '#9a9890';
-      g.fillRect(0, 0, 512, 512);
-      // speckle and stains
-      for (let i = 0; i < 9000; i++) {
-        const v = 130 + Math.random() * 40;
-        g.fillStyle = `rgba(${v},${v - 3},${v - 10},0.35)`;
-        g.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+      const rnd = (() => {
+        let s = 7;
+        return () => ((s = (s * 16807) % 2147483647) / 2147483647);
+      })();
+      g.fillStyle = '#9d9b93';
+      g.fillRect(0, 0, 1024, 1024);
+      // each slab slightly different in tone, trowel swirls
+      for (const [x, y] of [[0, 0], [512, 0], [0, 512], [512, 512]]) {
+        const v = 148 + rnd() * 14;
+        g.fillStyle = `rgba(${v},${v - 2},${v - 9},0.55)`;
+        g.fillRect(x, y, 512, 512);
+        for (let i = 0; i < 40; i++) {
+          g.strokeStyle = `rgba(${rnd() > 0.5 ? '255,255,250' : '60,58,52'},0.018)`;
+          g.lineWidth = 6 + rnd() * 10;
+          g.beginPath();
+          g.arc(x + rnd() * 512, y + rnd() * 512, 30 + rnd() * 90, rnd() * 6, rnd() * 6 + 1.5);
+          g.stroke();
+        }
       }
-      for (let i = 0; i < 18; i++) {
-        const r = 10 + Math.random() * 50;
-        const x = Math.random() * 512;
-        const y = Math.random() * 512;
+      for (let i = 0; i < 26000; i++) {
+        const v = 110 + rnd() * 80;
+        g.fillStyle = `rgba(${v},${v - 3},${v - 10},${0.25 + rnd() * 0.3})`;
+        g.fillRect(rnd() * 1024, rnd() * 1024, 1 + rnd() * 2, 1 + rnd() * 2);
+      }
+      // oil stains and drips
+      for (let i = 0; i < 26; i++) {
+        const r = 8 + rnd() * 46;
+        const x = rnd() * 1024;
+        const y = rnd() * 1024;
         const gr = g.createRadialGradient(x, y, 0, x, y, r);
-        gr.addColorStop(0, 'rgba(40,38,34,0.22)');
-        gr.addColorStop(1, 'rgba(40,38,34,0)');
+        gr.addColorStop(0, `rgba(28,26,24,${0.25 + rnd() * 0.25})`);
+        gr.addColorStop(0.6, 'rgba(32,30,28,0.12)');
+        gr.addColorStop(1, 'rgba(32,30,28,0)');
         g.fillStyle = gr;
-        g.fillRect(x - r, y - r, r * 2, r * 2);
-      }
-      // slab joints every 6 m (texture is 12 m)
-      g.strokeStyle = 'rgba(55,52,48,0.7)';
-      g.lineWidth = 2;
-      for (const k of [0, 256]) {
         g.beginPath();
-        g.moveTo(k, 0);
-        g.lineTo(k, 512);
-        g.moveTo(0, k);
-        g.lineTo(512, k);
+        g.ellipse(x, y, r, r * (0.5 + rnd() * 0.5), rnd() * 3, 0, Math.PI * 2);
+        g.fill();
+      }
+      // tyre marks: long faint curved bands
+      for (let i = 0; i < 7; i++) {
+        g.strokeStyle = `rgba(30,30,30,${0.035 + rnd() * 0.04})`;
+        g.lineWidth = 16 + rnd() * 14;
+        const x = rnd() * 1024;
+        g.beginPath();
+        g.moveTo(x, -20);
+        g.bezierCurveTo(x + rnd() * 300 - 150, 340, x + rnd() * 300 - 150, 680, x + rnd() * 400 - 200, 1044);
         g.stroke();
       }
+      // hairline cracks
+      for (let i = 0; i < 5; i++) {
+        let x = rnd() * 1024;
+        let y = rnd() * 1024;
+        g.strokeStyle = 'rgba(40,38,34,0.35)';
+        g.lineWidth = 1.2;
+        g.beginPath();
+        g.moveTo(x, y);
+        for (let k = 0; k < 14; k++) {
+          x += rnd() * 26 - 13;
+          y += rnd() * 26 - 6;
+          g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+      // sealed joints between the slabs
+      for (const k of [0, 512]) {
+        g.fillStyle = 'rgba(40,38,35,0.85)';
+        g.fillRect(k - 2, 0, 4, 1024);
+        g.fillRect(0, k - 2, 1024, 4);
+        g.fillStyle = 'rgba(200,198,190,0.25)';
+        g.fillRect(k + 2, 0, 2, 1024);
+        g.fillRect(0, k + 2, 1024, 2);
+      }
     },
-    [20, 14],
+    [20, 89 / 12],
   );
+  // one big non-repeating grime map over the whole yard (as the AO map, so it costs one texture fetch) hides the tiling
+  const grime = useCanvasTexture(512, 256, (g) => {
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, 512, 256);
+    let s = 11;
+    const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 260; i++) {
+      const x = r() * 512;
+      const y = r() * 256;
+      const rad = 4 + r() * 28;
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+      gr.addColorStop(0, `rgba(0,0,0,${0.08 + r() * 0.14})`);
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr;
+      g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+  });
+  useMemo(() => {
+    groundMat.map = tex;
+    grime.colorSpace = THREE.NoColorSpace;
+    groundMat.aoMap = grime;
+    groundMat.aoMapIntensity = 1;
+    groundMat.needsUpdate = true;
+  }, [tex, grime]);
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 11]} receiveShadow>
-      <planeGeometry args={[240, 82 + 1]} />
-      <meshStandardMaterial map={tex} roughness={0.92} />
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 14]} receiveShadow material={groundMat}>
+      <planeGeometry args={[240, 89]} />
     </mesh>
   );
 }
@@ -65,18 +141,8 @@ function Markings() {
       <planeGeometry args={[sx, sz]} />
     </mesh>
   );
-  const pad = [];
-  const w = 7.2;
-  const d = 3.4;
-  pad.push(line(PAD.x, PAD.z - d / 2, w, 0.15, yellow, 'p1'), line(PAD.x, PAD.z + d / 2, w, 0.15, yellow, 'p2'));
-  pad.push(line(PAD.x - w / 2, PAD.z, 0.15, d, yellow, 'p3'), line(PAD.x + w / 2, PAD.z, 0.15, d, yellow, 'p4'));
-  for (let i = 0; i < 9; i++) pad.push(line(PAD.x - w / 2 - 0.6 - i * 0.0, PAD.z - d / 2 + 0.2 + i * 0.37, 1.0, 0.12, yellow, `h${i}`));
   return (
     <group>
-      {pad}
-      <Text position={[PAD.x, 0.01, PAD.z + d / 2 + 0.7]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.55} color="#e8c21c" fontWeight={700}>
-        AREA LETAK GENSET
-      </Text>
       {/* trailer bay */}
       {line((TRUCK.x0 + TRUCK.headX1) / 2, 2.2, TRUCK.headX1 - TRUCK.x0 + 2, 0.15, white, 'b1')}
       {line((TRUCK.x0 + TRUCK.headX1) / 2, -2.2, TRUCK.headX1 - TRUCK.x0 + 2, 0.15, white, 'b2')}
@@ -161,6 +227,8 @@ function Containers() {
     g.lineWidth = 3;
     g.strokeRect(1, 1, 254, 62);
   });
+  // salt air: rust streaks and dents on the steel
+  const mat = useMemo(() => weather(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0.3 }), { dirt: 0.25, mudBelow: 0.8, mud: 0.3, chips: 0.2, rust: 0.45, scale: 0.9, dirtColor: '#5a4632' }), [tex]);
   const boxes = useMemo(() => {
     const out: { p: [number, number, number]; c: string; yaw: number }[] = [];
     let k = 0;
@@ -185,9 +253,8 @@ function Containers() {
     if (ref.current!.instanceColor) ref.current!.instanceColor.needsUpdate = true;
   }, [boxes]);
   return (
-    <instancedMesh ref={ref} args={[undefined, undefined, boxes.length]} castShadow receiveShadow>
+    <instancedMesh ref={ref} args={[undefined, mat, boxes.length]} castShadow receiveShadow>
       <boxGeometry args={[12.19, 2.59, 2.44]} />
-      <meshStandardMaterial map={tex} roughness={0.6} metalness={0.3} />
     </instancedMesh>
   );
 }
@@ -315,17 +382,17 @@ function LightTowers() {
 
 function Fence() {
   const posts = [];
-  for (let x = -78; x <= 78; x += 4) posts.push([x, 52] as const);
-  for (let z = -28; z <= 52; z += 4) posts.push([-78, z] as const, [78, z] as const);
+  for (let x = -78; x <= 78; x += 4) posts.push([x, 58] as const);
+  for (let z = -28; z <= 58; z += 4) posts.push([-78, z] as const, [78, z] as const);
   return (
     <group>
       {posts.map(([x, z], i) => (
         <Cyl key={i} r={0.04} l={2.4} m={M.steel} seg={6} position={[x, 1.2, z]} />
       ))}
       {[
-        [0, 52, 156, 0],
-        [-78, 12, 80, Math.PI / 2],
-        [78, 12, 80, Math.PI / 2],
+        [0, 58, 156, 0],
+        [-78, 15, 86, Math.PI / 2],
+        [78, 15, 86, Math.PI / 2],
       ].map(([x, z, l, r], i) => (
         <mesh key={i} position={[x, 1.2, z]} rotation={[0, r, 0]}>
           <planeGeometry args={[l, 2.3]} />
@@ -415,44 +482,6 @@ function Truck() {
   );
 }
 
-function Timbers() {
-  const tex = useCanvasTexture(
-    128,
-    32,
-    (g) => {
-      g.fillStyle = '#82603c';
-      g.fillRect(0, 0, 128, 32);
-      for (let i = 0; i < 26; i++) {
-        g.strokeStyle = `rgba(50,32,16,${0.15 + Math.random() * 0.25})`;
-        g.beginPath();
-        const y = Math.random() * 32;
-        g.moveTo(0, y);
-        g.bezierCurveTo(40, y + 3, 80, y - 3, 128, y + 1);
-        g.stroke();
-      }
-    },
-    [1, 1],
-  );
-  const deck = useRef<THREE.Group>(null);
-  useFrame(() => {
-    // the truck's timbers ride on the deck
-    const c = fk.cargo;
-    deck.current!.position.y = c.state === 'rest' && onDeck(c.x, c.z) ? 0 : 0.05;
-  });
-  const t = (o: (typeof TIMBERS)[number]) => (
-    <mesh key={o.id} position={[o.x, (o.y0 + o.y1) / 2, o.z]} rotation={[0, o.yaw, 0]} castShadow receiveShadow>
-      <boxGeometry args={[o.hx * 2, o.y1 - o.y0, o.hz * 2]} />
-      <meshStandardMaterial map={tex} roughness={0.9} />
-    </mesh>
-  );
-  return (
-    <group>
-      <group ref={deck}>{TIMBERS.filter((o) => o.y0 > 0.5).map(t)}</group>
-      {TIMBERS.filter((o) => o.y0 <= 0.5).map(t)}
-    </group>
-  );
-}
-
 export function Port() {
   return (
     <group>
@@ -468,7 +497,6 @@ export function Port() {
         <Fence />
       </Bake>
       <Truck />
-      <Timbers />
     </group>
   );
 }

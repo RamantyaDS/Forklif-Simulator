@@ -587,3 +587,31 @@ input:focus-visible {
     transition: none !important;
   }
 }
+
+/* job picker */
+.jobs { position: fixed; inset: 6vh 50% auto auto; transform: translateX(50%); width: min(920px, 94vw); max-height: 86vh; overflow: auto; background: rgba(16, 20, 24, 0.96); color: #e8edf0; border: 1px solid #2c3640; border-radius: 12px; padding: 18px 20px; z-index: 40; }
+.jobs h2 { margin: 0 0 12px; font-size: 20px; }
+.jobs .x, .p2hcard .x { position: absolute; right: 10px; top: 8px; background: none; border: 0; color: #c9d2d8; font-size: 22px; cursor: pointer; }
+.jobgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.jobcard { display: flex; flex-direction: column; gap: 6px; text-align: left; background: #1d252c; border: 1px solid #33404b; border-radius: 10px; padding: 12px; color: #dfe6ea; cursor: pointer; font: inherit; }
+.jobcard:hover { border-color: #f0a01e; }
+.jobcard.on { border-color: #f0a01e; background: #2a2618; }
+.jobcard b { font-size: 15px; color: #fff; }
+.jobcard .tag { font-size: 12px; color: #f0b44a; }
+.jobcard span:last-child { font-size: 12.5px; line-height: 1.4; color: #b8c3ca; }
+.mission .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.cps { display: flex; gap: 4px; margin: 4px 0; }
+.cps span { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: #2a333b; color: #9fb0bc; }
+.cps span.done { background: #2fa866; color: #fff; }
+.cps span.now { background: #f0a01e; color: #111; }
+/* P2H */
+.p2h-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; background: #f0a01e; color: #111; font-weight: 700; font-size: 12px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.6); }
+.p2h-dot.ok { background: #2fa866; color: #fff; }
+.p2h-dot.bad { background: #d9372b; color: #fff; }
+.p2h-dot.sel { outline: 3px solid #4aa8ff; }
+.p2hcard { position: fixed; right: 16px; bottom: 190px; width: min(360px, 92vw); background: rgba(16, 20, 24, 0.95); color: #e8edf0; border: 1px solid #2c3640; border-radius: 10px; padding: 12px 14px; z-index: 30; }
+.p2hcard h3 { margin: 0 24px 6px 0; font-size: 15px; }
+.p2hcard p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.45; }
+.p2hcard .row { display: flex; gap: 8px; }
+.result .row { display: flex; gap: 10px; justify-content: center; }
+@media (max-width: 760px) { .p2hcard { bottom: 230px; right: 8px; } }

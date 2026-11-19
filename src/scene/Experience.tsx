@@ -14,6 +14,11 @@ import { Fx } from './Fx';
 import { ForkliftModel, carriageWorld, truck } from './Forklift';
 import { Overlay } from './Overlay';
 import { Port } from './Port';
+import { JobProps } from './JobProps';
+import { P2hProps, SafetyLights } from './SafetyLights';
+import { Traffic } from './Traffic';
+import { Weather } from './Rain';
+import { Xray } from './Xray';
 
 /** Camera look offsets, changed by mouse drags, the wheel and the gamepad's right stick. */
 const look = { yaw: 0, pitch: 0.32, dist: 14, cabYaw: 0, cabPitch: -0.12 };
@@ -177,12 +182,13 @@ function CameraRig() {
 
 export function Experience() {
   const night = useUI((s) => s.night);
+  const rain = useUI((s) => s.rain);
   const hq = !LOW_GPU && typeof innerWidth === 'number' && innerWidth > 900;
   return (
     <Canvas shadows dpr={[1, MAX_DPR]} camera={{ position: [10, 8, 28], fov: 50, near: 0.1, far: 900 }} gl={{ antialias: true }}>
       <color attach="background" args={[night ? '#05070c' : '#bcd6ea']} />
       <fog attach="fog" args={[night ? '#05070c' : '#c7d6e0', 90, 420]} />
-      {night ? <Stars radius={300} depth={60} count={2500} factor={6} fade /> : <Sky sunPosition={[40, 16, 30]} turbidity={3.5} rayleigh={0.9} mieCoefficient={0.004} mieDirectionalG={0.8} />}
+      {night ? <Stars radius={300} depth={60} count={2500} factor={6} fade /> : rain ? null : <Sky sunPosition={[40, 16, 30]} turbidity={3.5} rayleigh={0.9} mieCoefficient={0.004} mieDirectionalG={0.8} />}
       <hemisphereLight args={[night ? '#1c2640' : '#dbe9ff', night ? '#0b0b0c' : '#5d5547', night ? 0.18 : 0.9]} />
       <SunFollow night={night} />
       {/* image-based lighting rendered once from simple light shapes (no download): reflections on paint, glass and chrome */}
@@ -194,7 +200,14 @@ export function Experience() {
         <Lightformer form="rect" intensity={0.35} color="#6b6458" scale={[80, 80, 1]} position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]} />
       </Environment>
       <Port />
-      <ForkliftModel />
+      <JobProps />
+      <Traffic />
+      <Weather />
+      <ForkliftModel>
+        <SafetyLights />
+        <P2hProps />
+      </ForkliftModel>
+      <Xray />
       <Cargo />
       <Exhaust />
       <Fx />

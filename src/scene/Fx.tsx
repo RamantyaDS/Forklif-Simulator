@@ -6,7 +6,7 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { forkCentres } from '../sim/forklift';
 import { SPEC } from '../sim/spec';
-import { GENSET } from '../sim/world';
+import { LOAD } from '../sim/world';
 import { fk, onEvent } from '../store';
 import { carriageWorld, truck } from './Forklift';
 
@@ -131,8 +131,8 @@ export function Fx() {
           for (let i = 0; i < 40; i++) {
             const k = Math.random();
             const side = Math.random() < 0.5 ? -1 : 1;
-            const lx = (k - 0.5) * GENSET.hx * 2;
-            const lz = side * GENSET.hz;
+            const lx = (k - 0.5) * LOAD.hx * 2;
+            const lz = side * LOAD.hz;
             a.set(c.x + Math.cos(c.yaw) * lx + Math.sin(c.yaw) * lz, c.y + 0.05, c.z - Math.sin(c.yaw) * lx + Math.cos(c.yaw) * lz);
             emit(dust, a, v.set(Math.sin(c.yaw) * side * 1.2 + rnd(0.5), 0.15, Math.cos(c.yaw) * side * 1.2 + rnd(0.5)), { life: 1.6, s0: 0.3, s1: 1.4, a: e === 'setdown' ? 0.28 : 0.15, color: '#b7ab97', drag: 2 });
           }

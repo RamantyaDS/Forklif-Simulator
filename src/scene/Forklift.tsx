@@ -13,6 +13,16 @@ import { fk } from '../store';
 import { Box, Cyl, M, Pipe, useCanvasTexture } from './parts';
 import { Bake } from './Bake';
 import { FORK_TYRE, Wheel } from './tyre';
+import { weather } from './weather';
+
+// worked, not new: grime low down, chipped edges, rust and bare steel on the fork blades
+weather(M.body, { dirt: 0.16, mudBelow: 1.1, mud: 0.55, chips: 0.2, scale: 1.3 });
+weather(M.bodyDark, { dirt: 0.2, mudBelow: 1.1, mud: 0.55, chips: 0.2, scale: 1.3 });
+weather(M.cab, { dirt: 0.18, mudBelow: 1.3, mud: 0.5, chips: 0.15, scale: 1.5 });
+weather(M.cabDark, { dirt: 0.2, mudBelow: 1.3, mud: 0.5, chips: 0.15, scale: 1.5 });
+weather(M.mast, { dirt: 0.3, mudBelow: 0.9, mud: 0.5, chips: 0.12, rust: 0.12, scale: 1.6, dirtColor: '#4a3e30' });
+weather(M.fork, { dirt: 0.35, mudBelow: 0.4, mud: 0.4, chips: 0.55, rust: 0.3, scale: 3.2 });
+weather(M.rimPaint, { dirt: 0.4, mudBelow: 1.4, mud: 0.7, chips: 0.2, rust: 0.2, scale: 2 });
 
 type V2 = [number, number];
 const WB = SPEC.wheelbase;
@@ -256,6 +266,12 @@ function Frame() {
           <RB s={[0.68, 0.82, 2.25]} r={0.05} m={M.cab} position={[sd * 1.12, 1.02, -1.98]} />
           <Cyl r={0.06} l={0.06} axis="x" m={M.mast} position={[sd * 1.47, 1.3, -2.6]} />
         </group>
+      ))}
+      {/* model badge on the green pods, as on the Traknus unit */}
+      {[-1, 1].map((sd) => (
+        <Text key={sd} position={[sd * 1.465, 1.24, -1.25]} rotation={[0, (sd * Math.PI) / 2, 0]} fontSize={0.15} color="#f2f2ee" fontWeight={700} letterSpacing={0.06}>
+          TOYOTA  240
+        </Text>
       ))}
       {/* entry steps and grab rails on the left */}
       {[0.62, 1.0].map((y) => (
@@ -584,7 +600,7 @@ function Mast() {
         </group>
         <Chain x={0.36} z={zf - 0.2} />
         <Chain x={-0.36} z={zf - 0.2} />
-        {/* carriage: hook bars, side plates, load backrest grille; forks on the hook-type positioner */}
+        {/* carriage: hook bars, side plates, positioner rods; forks on the hook-type positioner (no backrest) */}
         <group ref={carRef}>
           <group ref={heelRef} position={[0, 0, zf]}>
             <Bake>
@@ -596,11 +612,6 @@ function Mast() {
             {[-1, 1].map((s) => (
               <RB key={s} s={[0.14, 0.98, 0.22]} r={0.03} m={M.mast} position={[s * 1.4, 0.62, -0.12]} />
             ))}
-            {[-1.3, -0.87, -0.43, 0, 0.43, 0.87, 1.3].map((x) => (
-              <Box key={x} s={[0.05, 0.9, 0.05]} m={M.mast} position={[x, 1.55, -0.12]} />
-            ))}
-            <RB s={[2.75, 0.08, 0.08]} r={0.02} m={M.mast} position={[0, 2.0, -0.12]} />
-            <RB s={[2.75, 0.06, 0.06]} r={0.02} m={M.mast} position={[0, 1.55, -0.12]} />
             {[0, 1].map((i) => (
               <group key={i} ref={(el) => el && (forkRefs.current[i] = el)} userData={{ noBake: true }}>
                 <Mesh geo={forkGeo} m={M.fork} />

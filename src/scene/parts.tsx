@@ -54,6 +54,15 @@ export const M = {
   orange: new THREE.MeshStandardMaterial({ color: '#c8521f', metalness: 0.3, roughness: 0.5 }),
   green: new THREE.MeshStandardMaterial({ color: '#3d6b3a', metalness: 0.3, roughness: 0.55 }),
   blue: new THREE.MeshStandardMaterial({ color: '#1f4e8c', metalness: 0.3, roughness: 0.5 }),
+  orangeCone: new THREE.MeshStandardMaterial({ color: '#ff5a10', roughness: 0.55, side: THREE.DoubleSide }),
+  reflect: new THREE.MeshStandardMaterial({ color: '#f4f6f7', emissive: '#ffffff', emissiveIntensity: 0.08, roughness: 0.25, metalness: 0.3, side: THREE.DoubleSide }),
+  vest: new THREE.MeshStandardMaterial({ color: '#d9f21a', emissive: '#b8d000', emissiveIntensity: 0.12, roughness: 0.7 }),
+  vestOrange: new THREE.MeshStandardMaterial({ color: '#ff7a12', emissive: '#ff5a00', emissiveIntensity: 0.1, roughness: 0.7 }),
+  hat: new THREE.MeshStandardMaterial({ color: '#f5f5f2', roughness: 0.35 }),
+  hatYellow: new THREE.MeshStandardMaterial({ color: '#f2c21c', roughness: 0.35 }),
+  skin: new THREE.MeshStandardMaterial({ color: '#a8754f', roughness: 0.7 }),
+  jeans: new THREE.MeshStandardMaterial({ color: '#2c3a4f', roughness: 0.85 }),
+  boots: new THREE.MeshStandardMaterial({ color: '#1e1a16', roughness: 0.8 }),
 };
 
 type V3 = [number, number, number];

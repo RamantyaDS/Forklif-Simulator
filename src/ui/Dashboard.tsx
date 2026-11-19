@@ -3,7 +3,7 @@
 // the load chart, fork height and tilt) and the stability triangle with the projected centre of mass.
 import { TRIANGLE, cgOnForks } from '../sim/forklift';
 import { SPEC, capacityAt } from '../sim/spec';
-import { GENSET } from '../sim/world';
+import { LOAD } from '../sim/world';
 import { fk, useUI } from '../store';
 
 function Gauge({ value, max, label, unit, red, low, size = 112, ticks = 5, fmt = (v: number) => `${Math.round(v)}` }: { value: number; max: number; label: string; unit: string; red?: number; low?: number; size?: number; ticks?: number; fmt?: (v: number) => string }) {
@@ -101,7 +101,7 @@ export function Dashboard() {
   const loaded = fk.cargo.state === 'forks';
   const centre = loaded ? Math.max(0, cgOnForks(fk).a) : 0;
   const cap = capacityAt(centre);
-  const use = loaded ? GENSET.mass / cap : 0;
+  const use = loaded ? LOAD.mass / cap : 0;
   const running = fk.engine === 'running';
   const tiltDeg = (fk.tilt * 180) / Math.PI;
   return (

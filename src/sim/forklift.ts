@@ -1,12 +1,17 @@
 // Toyota 4FD240 simulation: Hino engine, torque converter and 2-speed powershift, air-over-hydraulic wet brakes,
-// rear-wheel steering, mast hydraulics, the stability triangle (the truck tips about a real edge) and the genset as
-// cargo (picked up, carried, sliding on the forks, set down or dropped). Pure logic: the scene, sound and panels read it.
+// rear-wheel steering, mast hydraulics, the stability triangle (the truck tips about a real edge) and the job's load
+// (picked up, carried, sliding on the forks, set down or dropped), wet ground, cones and the test checkpoints.
+// Pure logic: the scene, sound and panels read it.
 //
 // Truck ("body") frame: origin at the front axle centre on the ground, +z toward the forks, +x to the driver's left,
 // y up. World pose: (x, z) of that origin and `heading` (body +z → (sin h, cos h)).
 import { clamp, overlaps, toLocal, toWorld, type Obb } from './geom';
+import { JOB } from './jobs';
+import { pickDefects } from './p2h';
 import { CONVERTER, SPEC, capacityAt, maxTorque } from './spec';
-import { CARGO_START, GENSET, OBSTACLES, PAD, START, supportAt } from './world';
+import { CARGO_START, CONES, DYNAMIC, LOAD, OBSTACLES, PAD, START, supportAt } from './world';
+
+const GENSET = LOAD; // the current job's load (kept short: it is used everywhere below)
 
 const G = 9.81;
 export type Dir = 'F' | 'N' | 'R';
@@ -19,6 +24,8 @@ export interface Assists {
   airFull: boolean; // brake air already charged at start
   dirGuard: boolean; // refuses a direction change at speed
 }
+
+export type Phase = 'pickup' | 'carry' | 'place' | 'course' | 'done' | 'failed' | 'p2h';
 
 export interface Cargo {
   state: 'rest' | 'forks' | 'falling' | 'fallen';
@@ -103,8 +110,15 @@ export interface Forklift {
   damage: number; // 0..100 (genset)
   maxRisk: number;
   time: number;
-  phase: 'pickup' | 'carry' | 'place' | 'done' | 'failed';
-  result: { dist: number; yaw: number; stars: number } | null;
+  phase: Phase;
+  result: { dist: number; yaw: number; stars: number; score?: number; notes?: string[] } | null;
+  wet: boolean; // rain on the concrete: less grip, the load slides sooner
+  cones: number; // knocked over
+  cp: number; // next checkpoint (test course)
+  placed: boolean;
+  defects: string[]; // P2H faults hidden in this unit
+  answers: Record<string, 'ok' | 'bad'>;
+  placeErr?: { dist: number; yaw: number };
   events: string[];
   msg: string;
 }
@@ -187,8 +201,14 @@ export function create(assists?: Partial<Assists>): Forklift {
     damage: 0,
     maxRisk: 0,
     time: 0,
-    phase: 'pickup',
+    phase: JOB.cur.id === 'p2h' ? 'p2h' : 'pickup',
     result: null,
+    wet: false,
+    cones: 0,
+    cp: 0,
+    placed: false,
+    defects: JOB.cur.id === 'p2h' ? pickDefects() : [],
+    answers: {},
     events: [],
     msg: '',
   };
@@ -247,9 +267,9 @@ function truckBoxes(f: Forklift, x: number, z: number, heading: number): Obb[] {
 /** The genset as a solid box in the world (resting, or carried). */
 export function cargoBox(f: Forklift, x = f.x, z = f.z, heading = f.heading): Obb | null {
   const c = f.cargo;
-  if (c.state === 'rest') return { id: 'cargo', x: c.x, z: c.z, hx: GENSET.hx, hz: GENSET.hz, yaw: c.yaw, y0: c.y, y1: c.y + GENSET.h };
+  if (c.state === 'rest') return { id: 'cargo', x: c.x, z: c.z, hx: GENSET.hx, hz: GENSET.hz, yaw: c.yaw, y0: c.y + GENSET.lift0, y1: c.y + GENSET.h };
   if (c.state !== 'forks') return null;
-  const o = carriageToBody(f, c.lx, c.a, SPEC.forkT);
+  const o = carriageToBody(f, c.lx, c.a, SPEC.forkT - GENSET.lift0);
   const [wx, wz] = toWorld(x, z, heading, o.x, o.z);
   return { id: 'cargo', x: wx, z: wz, hx: GENSET.hx, hz: GENSET.hz, yaw: heading + c.yawRel, y0: o.y, y1: o.y + GENSET.h };
 }
@@ -259,17 +279,44 @@ export function hitAt(f: Forklift, x: number, z: number, heading: number): strin
   const mine = truckBoxes(f, x, z, heading);
   const carried = f.cargo.state === 'forks' ? cargoBox(f, x, z, heading) : null;
   if (carried) mine.push(carried);
-  const others = [...OBSTACLES];
+  const others = [...OBSTACLES, ...DYNAMIC];
   const resting = f.cargo.state === 'rest' || f.cargo.state === 'fallen' ? cargoBox(f) ?? fallenBox(f) : null;
   if (resting) others.push(resting);
   for (const a of mine) for (const b of others) if (overlaps(a, b)) return b.id ?? 'obstacle';
+  // fork pockets: a fork beside the pockets runs into the load's bottom rail
+  const c = f.cargo;
+  if (c.state === 'rest' && GENSET.pockets) {
+    const rail: Obb = { id: 'cargo', x: c.x, z: c.z, hx: GENSET.hx, hz: GENSET.hz, yaw: c.yaw, y0: c.y, y1: c.y + GENSET.lift0 };
+    for (const lx of forkCentres(f)) {
+      const fb = forkBox(f, lx, x, z, heading);
+      if (!overlaps(fb, rail)) continue;
+      const [gx] = toLocal(c.x, c.z, c.yaw, fb.x, fb.z);
+      if (!inPocket(gx)) return 'cargo';
+    }
+  }
   return null;
 }
 
 function fallenBox(f: Forklift): Obb | null {
   const c = f.cargo;
   if (c.state !== 'fallen') return null;
-  return { id: 'cargo', x: c.x, z: c.z, hx: GENSET.hx, hz: GENSET.hz + 0.6, yaw: c.yaw, y0: 0, y1: 2.6 };
+  return { id: 'cargo', x: c.x, z: c.z, hx: GENSET.hx, hz: GENSET.hz + 0.6, yaw: c.yaw, y0: 0, y1: GENSET.h };
+}
+
+/** Is a fork at this position along the load's length inside one of its fork pockets? */
+function inPocket(gx: number) {
+  const p = GENSET.pockets;
+  if (!p) return true;
+  const half = (p.w - SPEC.forkW) / 2 + 0.02;
+  return Math.abs(Math.abs(gx) - p.c) <= half;
+}
+
+/** The truck's plan boxes and the carried load, for traffic and effects. */
+export function footprint(f: Forklift) {
+  const b = truckBoxes(f, f.x, f.z, f.heading);
+  const c = f.cargo.state === 'forks' ? cargoBox(f) : null;
+  if (c) b.push(c);
+  return b;
 }
 
 // ---------- driver actions ----------
@@ -342,7 +389,7 @@ function engineStartStop(f: Forklift, dt: number) {
   f.coolant += ((f.engine === 'running' ? 84 + 6 * f.load : 32) - f.coolant) * Math.min(1, dt / (f.engine === 'running' ? 150 : 900));
 }
 
-const cargoMass = (f: Forklift) => (f.cargo.state === 'forks' ? GENSET.mass : 0);
+export const cargoMass = (f: Forklift) => (f.cargo.state === 'forks' ? GENSET.mass : 0);
 
 /** Lowest point the forks may go to here, and what stops them. */
 function forkFloor(f: Forklift, lift: number) {
@@ -380,7 +427,7 @@ function underCargo(f: Forklift) {
       const p = carriageToBody(f, lx, a, SPEC.forkT);
       const [wx, wz] = toWorld(f.x, f.z, f.heading, lx, p.z);
       const [gx, gz] = toLocal(c.x, c.z, c.yaw, wx, wz);
-      if (Math.abs(gx) < GENSET.hx && Math.abs(gz) < GENSET.hz) {
+      if (Math.abs(gx) < GENSET.hx && Math.abs(gz) < GENSET.hz && inPocket(gx)) {
         len += SPEC.forkL / 12;
         res.minTop = Math.min(res.minTop, p.y);
         res.topAtCg = Math.max(res.topAtCg, p.y);
@@ -412,12 +459,12 @@ function hydraulics(f: Forklift, dt: number) {
       up = lever * flow * (0.32 - 0.04 * loadFrac);
       let next = Math.min(SPEC.maxLift, f.lift + up * dt);
       const u = underCargo(f);
-      if (u.one && !u.both && f.lift + SPEC.forkT + up * dt >= f.cargo.y - 0.002) {
+      if (u.one && !u.both && f.lift + SPEC.forkT + up * dt >= f.cargo.y + GENSET.lift0 - 0.002) {
         // one fork pushing up under the set: it cannot lift it alone
         next = f.lift;
         f.relief = true;
-        if (!f.msg) say(f, 'Hanya satu garpu di bawah genset. Atur posisi supaya kedua garpu masuk di bawah rangka.');
-      } else if (u.both && f.cargo.state === 'rest' && u.topAtCg + up * dt >= f.cargo.y) pickUp(f);
+        if (!f.msg) say(f, GENSET.pockets ? 'Hanya satu garpu di fork pocket. Atur lebar garpu supaya keduanya masuk lubang.' : `Hanya satu garpu di bawah ${GENSET.name.toLowerCase()}. Atur posisi supaya kedua garpu masuk.`);
+      } else if (u.both && f.cargo.state === 'rest' && u.topAtCg + up * dt >= f.cargo.y + GENSET.lift0) pickUp(f);
       if (mastBlocked(f, next)) next = f.lift;
       f.lift = next;
       f.pressure = f.relief ? SPEC.reliefBar : staticBar;
@@ -450,8 +497,8 @@ function hydraulics(f: Forklift, dt: number) {
     f.tilt = next;
     const u = underCargo(f);
     if (forkFloor(f, f.lift) < 0) f.tilt = save;
-    else if (u.both && u.topAtCg >= f.cargo.y) pickUp(f);
-    else if (u.one && u.topAtCg >= f.cargo.y) f.tilt = save;
+    else if (u.both && u.topAtCg >= f.cargo.y + GENSET.lift0) pickUp(f);
+    else if (u.one && u.topAtCg >= f.cargo.y + GENSET.lift0) f.tilt = save;
   }
 
   // Fork positioner: only with empty forks.
@@ -520,15 +567,17 @@ function restOn(f: Forklift, lift: number) {
   const c = f.cargo;
   const save = f.lift;
   f.lift = lift;
-  const o = carriageToBody(f, c.lx, c.a, SPEC.forkT);
+  const o = carriageToBody(f, c.lx, c.a, SPEC.forkT - GENSET.lift0);
   const [wx, wz] = toWorld(f.x, f.z, f.heading, o.x, o.z);
   const yaw = f.heading + c.yawRel;
   f.lift = save;
   let h = 0;
   const pts: [number, number, number][] = [];
+  const ex = GENSET.hx - 0.05;
+  const ez = GENSET.hz - 0.05;
   for (let i = 0; i <= 59; i++)
-    for (const gz of [-1.05, -0.5, 0, 0.5, 1.05]) {
-      const gx = -2.9 + (5.8 * i) / 59;
+    for (const gz of [-ez, -ez / 2, 0, ez / 2, ez]) {
+      const gx = -ex + (2 * ex * i) / 59;
       const [px, pz] = toWorld(wx, wz, yaw, gx, gz);
       const s = supportAt(px, pz);
       pts.push([gx, gz, s]);
@@ -545,10 +594,10 @@ function restOn(f: Forklift, lift: number) {
 
 function setDown(f: Forklift, r: { x: number; z: number; yaw: number; h: number; stable: boolean }) {
   const c = f.cargo;
-  if (!r.stable) return dropCargo(f, 'Genset tidak tertumpu rata dan terguling. Taruh di atas balok kayu yang tersedia.');
-  // straight on the ground (no timber): the forks would be trapped under the base frame
-  if (r.h < 0.05) {
-    if (!f.msg) say(f, 'Tidak ada balok kayu di bawah genset: garpu akan terjepit. Taruh di atas balok kayu (bantalan).');
+  if (!r.stable) return dropCargo(f, `${GENSET.name} tidak tertumpu rata dan terguling. Taruh di atas balok/tumpuan yang tersedia.`);
+  // straight on the ground (no timber, no pockets): the forks would be trapped under it
+  if (r.h < 0.05 && !GENSET.groundOk) {
+    if (!f.msg) say(f, `Tidak ada balok kayu di bawah ${GENSET.name.toLowerCase()}: garpu akan terjepit. Taruh di atas balok kayu (bantalan).`);
     return;
   }
   c.state = 'rest';
@@ -576,7 +625,7 @@ function dropCargo(f: Forklift, why: string) {
   c.fallT = 0;
   c.fallDir = [dx, dz];
   f.damage = 100;
-  f.events.push('fall');
+  f.events.push(GENSET.id === 'coil' || GENSET.id === 'pipes' ? 'fallSteel' : 'fall');
   say(f, why);
   f.phase = 'failed';
 }
@@ -655,7 +704,8 @@ function drive(f: Forklift, dt: number) {
   // wheel forces
   let fDrive = (tt * k * ratio * SPEC.eta * dirSign) / r;
   const frontShare = clamp(1 + f.cg.z / SPEC.wheelbase, 0, 1); // f.cg.z is negative: behind the front axle
-  const grip = 0.8 * mass * G * frontShare;
+  const mu = f.wet ? 0.5 : 0.8;
+  const grip = mu * mass * G * frontShare;
   fDrive = clamp(fDrive, -grip, grip);
   const airK = clamp((f.air - 1) / 4, 0, 1);
   // spring parking brake: on when switched on, and by itself when the air runs low
@@ -666,7 +716,13 @@ function drive(f: Forklift, dt: number) {
     if (!f.park) say(f, 'Tekanan angin rendah: rem parkir pegas mengunci otomatis.');
     f.events.push('parkOn');
   }
-  const fBrake = f.brake * 0.45 * mass * G * airK * (rearOff ? 0.7 : 1) + (f.parkOn ? 0.35 * mass * G : 0);
+  let fBrake = f.brake * 0.45 * mass * G * airK * (rearOff ? 0.7 : 1) + (f.parkOn ? 0.35 * mass * G : 0);
+  // on wet concrete hard braking locks the front tyres: less stopping force and the steering goes light
+  const locked = f.wet && f.brake > 0.65 && Math.abs(f.v) > 1.5;
+  if (locked) {
+    fBrake = Math.min(fBrake, 0.3 * mass * G);
+    if (!f.msg) say(f, 'Roda terkunci di lantai basah! Rem dipompa pelan, jangan diinjak penuh.');
+  }
   const fRoll = 0.015 * mass * G;
   let v = f.v;
   if (Math.abs(v) > 0.05) {
@@ -684,7 +740,7 @@ function drive(f: Forklift, dt: number) {
   f.accel += (accel - f.accel) * Math.min(1, dt * 12);
 
   // move: the front axle is not steered, so it travels along the heading; the rear swings around
-  const yawRate = rearOff ? 0 : (v * Math.tan(f.steer)) / SPEC.wheelbase;
+  const yawRate = rearOff ? 0 : ((v * Math.tan(f.steer)) / SPEC.wheelbase) * (locked ? 0.35 : 1);
   const nh = f.heading + yawRate * dt;
   const nx = f.x + Math.sin(f.heading) * v * dt;
   const nz = f.z + Math.cos(f.heading) * v * dt;
@@ -693,14 +749,18 @@ function drive(f: Forklift, dt: number) {
   f.scrape = Math.abs(v) > 0.15 && forkFloor(f, f.lift) < 0.01 ? Math.min(1, Math.abs(v) / 2.5) : 0;
   const lateral = Math.abs(v * yawRate);
   const decel = Math.max(0, -f.accel * Math.sign(f.v || 1));
-  f.squeal = clamp(Math.max((lateral - 2.2) / 2, (decel - 3.2) / 2), 0, 1);
+  f.squeal = locked ? 1 : clamp(Math.max((lateral - (f.wet ? 1.6 : 2.2)) / 2, (decel - (f.wet ? 2.4 : 3.2)) / 2), 0, 1);
   if (hit) {
     if (Math.abs(f.v) > 0.6) {
       f.bumps++;
       f.events.push('bump');
       if (hit === 'cargo') {
         f.damage = Math.min(100, f.damage + Math.abs(f.v) * 12);
-        say(f, 'Menabrak genset! Hati-hati, garpu dan tiang bisa merusak rangka dan radiator.');
+        say(f, `Menabrak ${GENSET.name.toLowerCase()}! Hati-hati, garpu dan tiang bisa merusak muatan.`);
+      } else if (hit.startsWith('worker')) {
+        f.phase = 'failed';
+        f.events.push('scream');
+        say(f, 'Menabrak pekerja! Selalu berhenti dan bunyikan klakson saat ada orang di jalur.');
       } else say(f, 'Menabrak! Pelan-pelan saat dekat truk dan tumpukan kontainer.');
     }
     f.v = 0;
@@ -711,6 +771,24 @@ function drive(f: Forklift, dt: number) {
     f.heading = nh;
     f.v = v;
     f.yawRate = yawRate;
+    if (v !== 0 && CONES.length) knockCones(f, v);
+  }
+}
+
+/** Cones are not solid: the truck, the forks (when low) or the load knocks them over. */
+function knockCones(f: Forklift, v: number) {
+  const boxes = footprint(f);
+  for (const c of CONES) {
+    if (c.down || Math.hypot(c.x - f.x, c.z - f.z) > 12) continue;
+    const cone: Obb = { x: c.x, z: c.z, hx: 0.2, hz: 0.2, yaw: 0, y0: 0, y1: 0.75 };
+    if (boxes.some((b) => overlaps(b, cone))) {
+      c.down = true;
+      const s = Math.sign(v);
+      c.dir = [Math.sin(f.heading) * s, Math.cos(f.heading) * s];
+      f.cones++;
+      f.events.push('cone');
+      say(f, `Cone tersenggol (${f.cones}). Tiap cone mengurangi nilai ujian.`);
+    }
   }
 }
 
@@ -759,7 +837,7 @@ function stability(f: Forklift, dt: number) {
   let z = mb * SPEC.bodyCg.z + SPEC.carriageMass * car.z;
   if (f.cargo.state === 'forks') {
     const cg = cgOnForks(f);
-    const p = carriageToBody(f, cg.lx, cg.a, SPEC.forkT + GENSET.cg.y);
+    const p = carriageToBody(f, cg.lx, cg.a, SPEC.forkT - GENSET.lift0 + GENSET.cg.y);
     x += GENSET.mass * p.x;
     y += GENSET.mass * p.y;
     z += GENSET.mass * p.z;
@@ -844,7 +922,7 @@ function forwardLimit(f: Forklift) {
   const pts: { y: number; z: number }[] = [];
   for (const lx of forkCentres(f)) pts.push(carriageToBody(f, lx, SPEC.forkL, 0));
   if (f.cargo.state === 'forks') {
-    const o = carriageToBody(f, f.cargo.lx, f.cargo.a + f.cargo.near, SPEC.forkT);
+    const o = carriageToBody(f, f.cargo.lx, f.cargo.a + f.cargo.near, SPEC.forkT - GENSET.lift0);
     pts.push(o);
   }
   for (const p of pts) if (p.z > 0) lim = Math.min(lim, Math.atan2(Math.max(0, p.y), p.z));
@@ -863,13 +941,13 @@ function cargoOnForks(f: Forklift, dt: number) {
   if (along < 0 && cgOnForks(f).a - c.near <= 0.002) along = 0;
   const normal = G * k + fz * s;
   const side = fx;
-  const mus = 0.35;
-  const muk = 0.27;
+  const mus = GENSET.mu * (f.wet ? 0.8 : 1);
+  const muk = mus * 0.77;
   const tang = Math.hypot(along, side);
   if (!c.sliding && tang > mus * normal) {
     c.sliding = true;
     f.events.push('slide');
-    say(f, 'Genset bergeser di atas garpu! Tilt mundur dan kurangi pengereman/belokan mendadak.');
+    say(f, `${GENSET.name} bergeser di atas garpu! Tilt mundur dan kurangi pengereman/belokan mendadak.`);
   }
   if (c.sliding) {
     const vel = Math.hypot(c.va, c.vl);
@@ -894,8 +972,8 @@ function cargoOnForks(f: Forklift, dt: number) {
   }
   const cg2 = cgOnForks(f);
   const outer = f.spread / 2;
-  if (cg2.a > SPEC.forkL - 0.05) dropCargo(f, 'Pusat berat genset melewati ujung garpu: genset jatuh ke depan!');
-  else if (Math.abs(cg2.lx) > outer) dropCargo(f, 'Pusat berat genset di luar garpu: genset miring dan jatuh ke samping! Pusatkan garpu di bawah titik berat.');
+  if (cg2.a > SPEC.forkL - 0.05) dropCargo(f, `Pusat berat ${GENSET.name.toLowerCase()} melewati ujung garpu: muatan jatuh ke depan!`);
+  else if (Math.abs(cg2.lx) > outer) dropCargo(f, `Pusat berat ${GENSET.name.toLowerCase()} di luar garpu: muatan miring dan jatuh ke samping! Pusatkan garpu di bawah titik berat.`);
 }
 
 function cargoFalling(f: Forklift, dt: number) {
@@ -927,6 +1005,7 @@ function airSystem(f: Forklift, dt: number) {
   }
   if (!running) f.compressor = false;
   if (f.compressor) f.air = Math.min(8.3, f.air + 0.3 * (0.3 + (0.7 * f.rpm) / SPEC.ratedRpm) * dt);
+  if (f.defects.includes('air')) f.air = Math.min(f.air, 5.0 + 0.1 * Math.sin(f.time));
   // each brake application uses air; released with a hiss
   if (f.brake > 0.08) f.brakeHeld = Math.max(f.brakeHeld, f.brake);
   else if (f.brakeHeld > 0) {
@@ -944,22 +1023,78 @@ function airSystem(f: Forklift, dt: number) {
 
 function job(f: Forklift) {
   const c = f.cargo;
+  const cps = JOB.cur.checkpoints;
+  if (cps && f.cp < cps.length && f.phase !== 'failed' && f.phase !== 'done') {
+    const cp = cps[f.cp];
+    const [px, pz] = toWorld(f.x, f.z, f.heading, 0, -SPEC.wheelbase / 2);
+    const inR = Math.hypot(px - cp.x, pz - cp.z) < cp.r;
+    const before = f.cp < (JOB.cur.placeAfter ?? 0);
+    const ok =
+      inR &&
+      (!cp.loaded || c.state === 'forks') &&
+      (!cp.dir || f.dir === cp.dir) &&
+      (!cp.stop || (Math.abs(f.v) < 0.05 && f.lift < 0.4)) &&
+      (before || f.placed);
+    if (ok) {
+      f.cp++;
+      f.events.push('checkpoint');
+      if (f.cp === cps.length) finish(f, Math.hypot(c.x - PAD.x, c.z - PAD.z), 0);
+    } else if (inR && cp.dir && f.dir !== cp.dir && !f.msg) say(f, 'Bagian ini harus dilalui MUNDUR.');
+    else if (inR && cp.loaded && c.state !== 'forks' && !f.msg) say(f, 'Slalom harus dilalui sambil membawa palet.');
+  }
   if (f.phase === 'place' && c.state === 'rest') {
     const dist = Math.hypot(c.x - PAD.x, c.z - PAD.z);
     const dyaw = Math.abs(Math.atan2(Math.sin(2 * (c.yaw - PAD.yaw)), Math.cos(2 * (c.yaw - PAD.yaw)))) / 2; // either end
-    const onPad = dist < 2.5;
-    // done when the forks are clear of the set
+    const onPad = dist < 2.5 && Math.abs(c.y - PAD.y) < 0.12;
+    // done when the forks are clear of the load
     if (onPad && !underCargo(f).both && !underCargo(f).one) {
-      const okPos = dist < PAD.tolerance;
-      const okYaw = dyaw < PAD.yawTol;
-      let stars = 1 + (okPos && okYaw ? 1 : 0) + (f.bumps === 0 && f.damage < 1 && f.maxRisk < 0.85 ? 1 : 0);
-      if (!onPad) stars = 0;
-      f.result = { dist, yaw: dyaw, stars };
-      f.phase = 'done';
-      f.events.push('done');
-    } else if (!onPad && c.y < 0.3 && !f.msg) say(f, 'Genset diletakkan di luar area tujuan. Angkat lagi dan bawa ke bantalan bermarka kuning.');
+      if (cps) {
+        if (f.cp < (JOB.cur.placeAfter ?? 0)) {
+          if (!f.msg) say(f, 'Slalom belum lengkap. Angkat palet lagi dan lewati semua cone slalom dulu.');
+        } else if (!f.placed) {
+          f.placed = true;
+          f.placeErr = { dist, yaw: dyaw };
+          f.phase = 'course';
+          f.events.push('checkpoint');
+        }
+      } else finish(f, dist, dyaw);
+    } else if (!onPad && c.y < 0.3 && !f.msg && !GENSET.groundOk) say(f, 'Muatan diletakkan di luar area tujuan. Angkat lagi dan bawa ke tempat bermarka kuning.');
   }
   if (f.phase === 'place' && c.state === 'forks') f.phase = 'carry';
+  if (f.phase === 'course' && c.state === 'forks') {
+    f.placed = false;
+    f.phase = 'carry';
+  }
+}
+
+function finish(f: Forklift, dist: number, dyaw: number) {
+  const e = f.placeErr ?? { dist, yaw: dyaw };
+  const okPos = e.dist < PAD.tolerance;
+  const okYaw = e.yaw < PAD.yawTol;
+  let stars = 1 + (okPos && okYaw ? 1 : 0) + (f.bumps === 0 && f.damage < 1 && f.maxRisk < 0.85 && f.cones === 0 ? 1 : 0);
+  if (e.dist > 2.5) stars = 0;
+  let score: number | undefined;
+  if (JOB.cur.checkpoints) score = Math.max(0, Math.round(100 - f.cones * 5 - f.bumps * 10 - Math.max(0, e.dist - PAD.tolerance) * 20 - Math.max(0, f.time - 240) / 6));
+  f.result = { dist: e.dist, yaw: e.yaw, stars, score };
+  f.phase = 'done';
+  f.events.push('done');
+}
+
+/** P2H: grade the answers against the hidden faults. */
+export function finishP2h(f: Forklift, items: string[]) {
+  let right = 0;
+  const notes: string[] = [];
+  for (const id of items) {
+    const bad = f.defects.includes(id);
+    const said = f.answers[id];
+    if ((said === 'bad') === bad) right++;
+    else notes.push(id);
+  }
+  const missed = f.defects.filter((d) => f.answers[d] !== 'bad').length;
+  const stars = missed > 0 ? (missed > 1 ? 0 : 1) : right === items.length ? 3 : 2;
+  f.result = { dist: 0, yaw: 0, stars, score: Math.round((right / items.length) * 100), notes };
+  f.phase = 'done';
+  f.events.push('done');
 }
 
 export { capacityAt };

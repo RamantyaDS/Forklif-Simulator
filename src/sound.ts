@@ -4,7 +4,8 @@
 // torque converter whine, turbo, relief valve, air brake hiss and dryer purge, chain clatter, tyres, air horn,
 // reverse beeper, stability alarm and impacts.
 import { ENGINE_WORKLET } from './engineWorklet';
-import { fk, toast } from './store';
+import { fk, toast, useUI } from './store';
+import { WORKERS, YARD, routeAt } from './sim/traffic';
 import { fallbackActive, fallbackEvent, startFallback, updateFallback } from './soundFallback';
 
 const BASE = import.meta.env.BASE_URL + 'audio/';
@@ -185,6 +186,11 @@ async function build(c: AudioContext) {
   scrapeAm.start();
   // port ambience: wind over the yard and water lapping at the quay wall (slow swell)
   const wind = noiseLoop('lowpass', 420, 0.5);
+  // rain: hiss on the concrete and drumming on the cab roof
+  const rain = noiseLoop('highpass', 1600, 0.4);
+  const roof = noiseLoop('bandpass', 700, 0.8);
+  // the terminal tractor's diesel, heard from where it is
+  const yard = osc('sawtooth', 46, 260);
   const water = noiseLoop('bandpass', 650, 0.8);
   const swell = c.createOscillator();
   swell.frequency.value = 0.18;
@@ -192,7 +198,7 @@ async function build(c: AudioContext) {
   swellDepth.gain.value = 0;
   swell.connect(swellDepth).connect(water.g.gain);
   swell.start();
-  return { startB, stopB, nb, engineBus, tone, idle, mid, synth, synthG, turbo, conv, hyd, relief, tyre, hornG, beep, alarm, squeal, scrape, scrapeDepth, wind, water, swellDepth };
+  return { startB, stopB, nb, engineBus, tone, idle, mid, synth, synthG, turbo, conv, hyd, relief, tyre, hornG, beep, alarm, squeal, scrape, scrapeDepth, wind, water, swellDepth, rain, roof, yard };
 }
 
 // After the user has asked for sound, every interaction retries: creating the AudioContext failed on the first
@@ -362,12 +368,53 @@ export function playEvent(e: string) {
     clunk(120, 1.2, 0.8);
     burst(700, 0.5, 0.9, 1.8, 'lowpass', 0.01);
     burst(3500, 1, 0.35, 1.2);
-  } else if (e === 'done') clunk(1500, 0.2, 0.1);
+  } else if (e === 'done') {
+    clunk(1500, 0.2, 0.1);
+    clunk(2000, 0.15, 0.1);
+  } else if (e === 'checkpoint') clunk(1800, 0.16, 0.08);
+  else if (e === 'cone') {
+    clunk(260, 0.5, 0.12);
+    burst(1200, 2, 0.12, 0.25);
+  } else if (e === 'fallSteel') {
+    clunk(140, 1.3, 0.9);
+    clunk(620, 0.6, 1.4);
+    burst(3200, 6, 0.35, 1.5, 'bandpass', 0.01);
+  } else if (e === 'scream') {
+    whistle();
+    clunk(200, 0.8, 0.3);
+  }
   else if (e === 'forkTouch') {
     clunk(1100, 0.35, 0.09);
     burst(2600, 3, 0.08, 0.15);
   }
 }
+
+/** A worker's safety whistle: two short shrill blasts. */
+function whistle() {
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  for (const d of [0, 0.32]) {
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(3150, t0 + d);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 38;
+    const lg = ctx.createGain();
+    lg.gain.value = 120;
+    lfo.connect(lg).connect(o.frequency);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0 + d);
+    g.gain.linearRampToValueAtTime(0.06, t0 + d + 0.02);
+    g.gain.setValueAtTime(0.06, t0 + d + 0.22);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.28);
+    o.connect(g).connect(master);
+    o.start(t0 + d);
+    lfo.start(t0 + d);
+    o.stop(t0 + d + 0.3);
+    lfo.stop(t0 + d + 0.3);
+  }
+}
+let nextWhistle = 0;
 
 /** A distant ship horn: two low reeds, slow attack and long fade. */
 function shipHorn() {
@@ -473,7 +520,7 @@ export function updateSound(distance: number, inCab: boolean) {
   k(N.tyre.g.gain, Math.min(0.2, sp * 0.03) * near * cab, 0.1);
 
   // horn, reverse beeper (while reverse is selected and running), stability alarm
-  k(N.hornG.gain, fk.horn ? 0.12 * Math.max(0.4, near) : 0, 0.02);
+  k(N.hornG.gain, fk.horn && !fk.defects.includes('horn') ? 0.12 * Math.max(0.4, near) : 0, 0.02);
   const beepOn = fk.dir === 'R' && running && Math.sin(t * Math.PI * 2 * 1.1) > 0;
   k(N.beep.g.gain, beepOn ? 0.05 * near : 0, 0.005);
   const warn = fk.assists.sas && !fk.tipped && fk.risk > 0.8 && Math.sin(t * Math.PI * 2 * 4) > 0;
@@ -488,6 +535,28 @@ export function updateSound(distance: number, inCab: boolean) {
   // ambience: always there, the water louder near the quay; a ship horn and gulls now and then
   const quay = Math.max(0, Math.min(1, 1 - (fk.z + 30) / 40));
   k(N.wind.g.gain, 0.025 * cab, 0.5);
+  const raining = useUI.getState().rain ? 1 : 0;
+  k(N.rain.g.gain, raining * (inCab ? 0.03 : 0.07), 1.2);
+  k(N.roof.g.gain, raining * (inCab ? 0.09 : 0.015), 1.2);
+  const [yx, yz] = routeAt(YARD.s);
+  const yd = Math.hypot(yx - fk.x, yz - fk.z);
+  k(N.yard.o.frequency, 40 + YARD.v * 4, 0.3);
+  k(N.yard.g.gain, (0.05 * Math.min(1, 10 / Math.max(6, yd))) * (0.4 + 0.6 * (YARD.v / 5)) * cab, 0.3);
+  // a worker blows the whistle when the forklift comes at them fast
+  if (t > nextWhistle && fk.engine === 'running' && Math.abs(fk.v) > 2.5) {
+    const dx = Math.sin(fk.heading) * Math.sign(fk.v);
+    const dz = Math.cos(fk.heading) * Math.sign(fk.v);
+    const close = WORKERS.some((w) => {
+      const rx = w.x - fk.x;
+      const rz = w.z - fk.z;
+      const ahead = rx * dx + rz * dz;
+      return ahead > -2 && ahead < 12 && Math.abs(rx * dz - rz * dx) < 3.5;
+    });
+    if (close) {
+      whistle();
+      nextWhistle = t + 4;
+    }
+  }
   k(N.swellDepth.gain, 0.02 + 0.05 * quay, 0.5);
   if (t > nextHorn) {
     nextHorn = t + 70 + Math.random() * 80;
