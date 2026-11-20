@@ -5,7 +5,8 @@ import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { CRANE, LIGHTS, QUAY_Z, STACKS, TRUCK, onDeck } from '../sim/world';
+import { CRANE, GATE_HALF, LIGHTS, QUAY_Z, STACKS, TRUCK, onDeck } from '../sim/world';
+import { EMBED } from '../embed';
 import { fk, useUI } from '../store';
 import { Box, Cyl, M, useCanvasTexture } from './parts';
 import { TRUCK_TYRE, Wheel as TruckWheel } from './tyre';
@@ -203,7 +204,8 @@ function Quay() {
           <Box s={[1.2, 1.6, 0.5]} m={M.black} position={[0, -1.2, -2.3]} />
         </group>
       ))}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.4, QUAY_Z - 90]}>
+      {/* the sea; the Traknus World draws its own coastline and sea */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.4, QUAY_Z - 90]} visible={!EMBED.on}>
         <planeGeometry args={[600, 178]} />
         <meshStandardMaterial ref={mat} color="#1f4c5c" roughness={0.12} metalness={0.25} normalMap={water} normalScale={new THREE.Vector2(0.4, 0.4)} />
       </mesh>
@@ -382,7 +384,7 @@ function LightTowers() {
 
 function Fence() {
   const posts = [];
-  for (let x = -78; x <= 78; x += 4) posts.push([x, 58] as const);
+  for (let x = -78; x <= 78; x += 4) if (Math.abs(x) >= GATE_HALF) posts.push([x, 58] as const);
   for (let z = -28; z <= 58; z += 4) posts.push([-78, z] as const, [78, z] as const);
   return (
     <group>
@@ -390,7 +392,12 @@ function Fence() {
         <Cyl key={i} r={0.04} l={2.4} m={M.steel} seg={6} position={[x, 1.2, z]} />
       ))}
       {[
-        [0, 58, 156, 0],
+        ...(GATE_HALF
+          ? [
+              [-(78 + GATE_HALF) / 2, 58, 78 - GATE_HALF, 0],
+              [(78 + GATE_HALF) / 2, 58, 78 - GATE_HALF, 0],
+            ]
+          : [[0, 58, 156, 0]]),
         [-78, 15, 86, Math.PI / 2],
         [78, 15, 86, Math.PI / 2],
       ].map(([x, z, l, r], i) => (

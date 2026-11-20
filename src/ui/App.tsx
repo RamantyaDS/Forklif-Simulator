@@ -470,12 +470,22 @@ function Touch() {
 
 export function App() {
   const started = useUI((s) => s.started);
-  const panel = useUI((s) => s.panel);
   useEffect(() => bindKeys(), []);
   return (
     <>
       <Experience />
       <FpsWarn />
+      <Hud />
+      {!started && <Intro />}
+    </>
+  );
+}
+
+/** Everything on screen over the 3D view; the Traknus World shows this while the player drives the forklift. */
+export function Hud() {
+  const panel = useUI((s) => s.panel);
+  return (
+    <>
       <header className="brand">
         <button className="menu" onClick={() => useUI.getState().set({ panel: !panel })} aria-label={panel ? 'Sembunyikan panel' : 'Tampilkan panel'}>
           {panel ? '◀' : '☰'}
@@ -494,34 +504,37 @@ export function App() {
       <Result />
       <JobPicker />
       <P2hCard />
-      {!started && (
-        <div className="intro">
-          <div>
-            <h1>Simulator Forklift Toyota 4FD240</h1>
-            <p>
-              Forklift diesel 24 ton (Hino 159 kW, torque converter, rem angin, garpu 2,44 m) di pelabuhan yang hidup: pekerja lalu-lalang, terminal tractor,
-              spotter memberi isyarat. Tujuh muatan (genset, coil baja, pipa, kayu, palet semen, trafo, kontainer), pemeriksaan harian P2H dan latihan ujian SIO.
-              Jangan menabrak, menjatuhkan muatan, atau terguling.
-            </p>
-            <ol>
-              <li>Hidupkan mesin (tuas arah di N), tunggu angin rem naik, lepas rem parkir.</li>
-              <li>Atur tinggi dan lebar garpu sesuai muatan, masukkan pelan, angkat, tilt mundur.</li>
-              <li>Bawa dengan garpu rendah, letakkan di sasaran (ikuti isyarat spotter), lalu keluarkan garpu.</li>
-              <li>Ganti misi lewat tombol “Pilih misi”. Hujan, malam dan X-ray ada di panel kiri.</li>
-            </ol>
-            <p className="dim">Keyboard + mouse, gamepad, atau layar sentuh. Garis segitiga di tanah menunjukkan batas stabilitas.</p>
-            <button
-              className="big ok"
-              onClick={() => {
-                void ensureAudio();
-                useUI.getState().set({ started: true });
-              }}
-            >
-              Mulai (suara aktif)
-            </button>
-          </div>
-        </div>
-      )}
     </>
+  );
+}
+
+function Intro() {
+  return (
+    <div className="intro">
+      <div>
+        <h1>Simulator Forklift Toyota 4FD240</h1>
+        <p>
+          Forklift diesel 24 ton (Hino 159 kW, torque converter, rem angin, garpu 2,44 m) di pelabuhan yang hidup: pekerja lalu-lalang, terminal tractor,
+          spotter memberi isyarat. Tujuh muatan (genset, coil baja, pipa, kayu, palet semen, trafo, kontainer), pemeriksaan harian P2H dan latihan ujian SIO.
+          Jangan menabrak, menjatuhkan muatan, atau terguling.
+        </p>
+        <ol>
+          <li>Hidupkan mesin (tuas arah di N), tunggu angin rem naik, lepas rem parkir.</li>
+          <li>Atur tinggi dan lebar garpu sesuai muatan, masukkan pelan, angkat, tilt mundur.</li>
+          <li>Bawa dengan garpu rendah, letakkan di sasaran (ikuti isyarat spotter), lalu keluarkan garpu.</li>
+          <li>Ganti misi lewat tombol “Pilih misi”. Hujan, malam dan X-ray ada di panel kiri.</li>
+        </ol>
+        <p className="dim">Keyboard + mouse, gamepad, atau layar sentuh. Garis segitiga di tanah menunjukkan batas stabilitas.</p>
+        <button
+          className="big ok"
+          onClick={() => {
+            void ensureAudio();
+            useUI.getState().set({ started: true });
+          }}
+        >
+          Mulai (suara aktif)
+        </button>
+      </div>
+    </div>
   );
 }

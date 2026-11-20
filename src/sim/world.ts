@@ -3,6 +3,7 @@
 // container), target and cones through `applyLayout`. Everything solid is an oriented box (see geom.ts).
 // World axes: x along the quay, z inland (the quay edge is at z = −30), y up. Units: metres.
 import { CARGOS, type CargoDef } from './cargo';
+import { EMBED } from '../embed';
 import { inside, toWorld, type Obb } from './geom';
 
 /** The 2250 kVA open set (Genset Simulator model). */
@@ -22,6 +23,8 @@ export const PAD = { x: -24, z: 16, yaw: 0, y: 0.2, tolerance: 0.6, yawTol: (10 
 export const START = { x: -3, z: 12, heading: Math.PI };
 
 export const QUAY_Z = -30;
+/** Half width of a gate in the north fence: only in the Traknus World, where people and trucks come in by road. */
+export const GATE_HALF = EMBED.on ? 6 : 0;
 
 export function box(id: string, x: number, z: number, sx: number, sz: number, y0: number, y1: number, yaw = 0): Obb {
   return { id, x, z, hx: sx / 2, hz: sz / 2, yaw, y0, y1 };
@@ -71,7 +74,9 @@ const FIXED: Obb[] = [
   ...LIGHTS.map(([x, z], i) => box(`light-${i}`, x, z, 0.8, 0.8, 0, 30)),
   // quay curb (the water is beyond it) and the yard fence
   box('curb', 0, QUAY_Z + 0.25, 160, 0.5, 0, 0.4),
-  box('fence-n', 0, 58, 160, 0.3, 0, 2.4),
+  ...(GATE_HALF
+    ? [box('fence-nw', -(78 + GATE_HALF) / 2, 58, 78 - GATE_HALF, 0.3, 0, 2.4), box('fence-ne', (78 + GATE_HALF) / 2, 58, 78 - GATE_HALF, 0.3, 0, 2.4)]
+    : [box('fence-n', 0, 58, 160, 0.3, 0, 2.4)]),
   box('fence-e', 78, 14, 0.3, 88, 0, 2.4),
   box('fence-w', -78, 14, 0.3, 88, 0, 2.4),
 ];

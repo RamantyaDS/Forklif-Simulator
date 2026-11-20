@@ -180,6 +180,33 @@ function CameraRig() {
   return cam === 'orbit' ? <OrbitControls ref={orbit} makeDefault enablePan={false} minDistance={5} maxDistance={60} maxPolarAngle={Math.PI * 0.49} target={[fk.x, 1.6, fk.z]} /> : null;
 }
 
+/**
+ * The port, the forklift and everything that moves, without sky, lights or post effects. The Traknus World mounts this
+ * as one zone; `drive` is false there while the player walks around (the world moves the camera, the keys stay off).
+ */
+export function ZoneContent({ drive = true }: { drive?: boolean }) {
+  return (
+    <>
+      <Port />
+      <JobProps />
+      <Traffic />
+      <Weather />
+      <ForkliftModel>
+        <SafetyLights />
+        <P2hProps />
+      </ForkliftModel>
+      <Xray />
+      <Cargo />
+      <Exhaust />
+      <Fx />
+      <Overlay />
+      {drive && <CameraRig />}
+      <Driver />
+      <DevInfo />
+    </>
+  );
+}
+
 export function Experience() {
   const night = useUI((s) => s.night);
   const rain = useUI((s) => s.rain);
@@ -199,22 +226,7 @@ export function Experience() {
         <Lightformer form="circle" intensity={night ? 0 : 6} color="#fff0d6" scale={6} position={[30, 14, 22]} target={[0, 0, 0]} />
         <Lightformer form="rect" intensity={0.35} color="#6b6458" scale={[80, 80, 1]} position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]} />
       </Environment>
-      <Port />
-      <JobProps />
-      <Traffic />
-      <Weather />
-      <ForkliftModel>
-        <SafetyLights />
-        <P2hProps />
-      </ForkliftModel>
-      <Xray />
-      <Cargo />
-      <Exhaust />
-      <Fx />
-      <Overlay />
-      <CameraRig />
-      <Driver />
-      <DevInfo />
+      <ZoneContent />
       {FULL ? (
         <EffectComposer>
           {hq ? <N8AO aoRadius={1.2} intensity={2} distanceFalloff={0.6} halfRes quality="performance" aoSamples={10} denoiseSamples={4} /> : <></>}

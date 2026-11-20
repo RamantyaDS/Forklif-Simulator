@@ -1,6 +1,7 @@
 // Keyboard, gamepad and touch mapped onto the forklift's controls. Held keys and analog inputs are combined every
 // frame in applyHeld(); one-shot actions fire on key down / button press.
 import { setDir, startEngine, stopEngine, togglePark } from './sim/forklift';
+import { EMBED } from './embed';
 import { ensureAudio } from './sound';
 import { fk, useUI, type CamMode } from './store';
 
@@ -59,6 +60,11 @@ export function nextCam() {
 }
 
 function onKey(e: KeyboardEvent) {
+  if (!EMBED.input) {
+    held.clear();
+    fk.horn = false;
+    return;
+  }
   const tag = (e.target as HTMLElement)?.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
   const k = e.key.toLowerCase();
@@ -98,7 +104,7 @@ const dz = (v: number, d = 0.12) => (Math.abs(v) < d ? 0 : (v - Math.sign(v) * d
 /** Continuous controls, called every frame. */
 export function applyHeld(dt: number) {
   let gp: Gamepad | null = null;
-  for (const g of navigator.getGamepads?.() ?? []) if (g && g.connected) gp = gp ?? g;
+  if (EMBED.input) for (const g of navigator.getGamepads?.() ?? []) if (g && g.connected) gp = gp ?? g;
   const btn = (i: number) => !!gp?.buttons[i]?.pressed;
   const val = (i: number) => gp?.buttons[i]?.value ?? 0;
   if (gp) {

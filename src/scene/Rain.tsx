@@ -3,6 +3,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { EMBED } from '../embed';
 import { useUI } from '../store';
 import { groundMat } from './Port';
 import { useCanvasTexture } from './parts';
@@ -112,14 +113,17 @@ export function Weather() {
     wet.fog.set(night ? '#06080b' : '#8c969d');
     k.current += ((rain ? 1 : 0) - k.current) * Math.min(1, dt * 0.7);
     const w = k.current;
-    if (scene.background instanceof THREE.Color) scene.background.copy(base.bg).lerp(wet.bg, w);
-    if (scene.fog instanceof THREE.Fog) {
-      scene.fog.color.copy(base.fog).lerp(wet.fog, w);
-      scene.fog.near = 90 - 60 * w;
-      scene.fog.far = 420 - 250 * w;
+    if (!EMBED.on) {
+      // in the Traknus World the world's own weather sets the sky, fog and sun
+      if (scene.background instanceof THREE.Color) scene.background.copy(base.bg).lerp(wet.bg, w);
+      if (scene.fog instanceof THREE.Fog) {
+        scene.fog.color.copy(base.fog).lerp(wet.fog, w);
+        scene.fog.near = 90 - 60 * w;
+        scene.fog.far = 420 - 250 * w;
+      }
+      if (!sun.current) scene.traverse((o) => (o as THREE.DirectionalLight).isDirectionalLight && (sun.current = o as THREE.DirectionalLight));
+      if (sun.current) sun.current.intensity = (night ? 0.25 : 3.1) * (1 - 0.65 * w);
     }
-    if (!sun.current) scene.traverse((o) => (o as THREE.DirectionalLight).isDirectionalLight && (sun.current = o as THREE.DirectionalLight));
-    if (sun.current) sun.current.intensity = (night ? 0.25 : 3.1) * (1 - 0.65 * w);
     groundMat.roughness = 0.92 - 0.5 * w;
     groundMat.color.copy(dry).lerp(damp, w);
   });
