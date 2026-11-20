@@ -10,11 +10,17 @@ import { EMBED } from '../embed';
 import { fk, useUI } from '../store';
 import { Box, Cyl, M, useCanvasTexture } from './parts';
 import { TRUCK_TYRE, Wheel as TruckWheel } from './tyre';
+import { KitMesh, buildCab, buildChassis, buildFifthWheel, kitWheels, paint, type Livery } from './truckKit';
 import { Bake } from './Bake';
 import { weather } from './weather';
 
 weather(M.trailer, { dirt: 0.3, mudBelow: 1.2, mud: 0.6, chips: 0.25, rust: 0.25 });
 weather(M.deckPlate, { dirt: 0.45, mudBelow: 9, mud: 0.2, chips: 0, rust: 0.45, scale: 1.2 });
+/** The trailer's main beams stop here; ahead of it the deck rests on the tractor (kingpin at KINGPIN). */
+const NECK = 1.6;
+const KINGPIN = TRUCK.headX1 - 1.3 - 3.95;
+const HEAD_LIVERY: Livery = { cab: '#eef0f0', stripe: '#1d4637', text: 'LOGISTIK', textColor: '#1d4637' };
+weather(paint(HEAD_LIVERY.cab), { dirt: 0.22, mudBelow: 1.5, mud: 0.6, chips: 0.1, scale: 1.2 });
 weather(M.cabWhite, { dirt: 0.22, mudBelow: 1.5, mud: 0.6, chips: 0.1, scale: 1.2 });
 
 /** The apron material, shared with the weather (wet concrete is darker and glossier). */
@@ -430,7 +436,6 @@ function Truck() {
   });
   const { x0, x1, hz, deckTop } = TRUCK;
   const len = x1 - x0;
-  const h0 = TRUCK.headX0;
   return (
     <group>
       <group ref={deck}>
@@ -443,11 +448,13 @@ function Truck() {
             {Array.from({ length: 12 }, (_, i) => (
               <Box key={i} s={[0.1, 0.12, 0.06]} m={M.mast} position={[x0 + 0.6 + i * 1.07, deckTop - 0.12, s * hz]} />
             ))}
-            <Box s={[len - 0.2, 0.42, 0.14]} m={M.trailer} position={[(x0 + x1) / 2, deckTop - 0.45, s * 0.5]} />
+            <Box s={[NECK - x0 - 0.1, 0.42, 0.14]} m={M.trailer} position={[(x0 + 0.1 + NECK) / 2, deckTop - 0.45, s * 0.5]} />
           </group>
         ))}
-        {/* gooseneck step to the kingpin */}
-        <Box s={[1.6, 0.3, 1.2]} m={M.trailer} position={[x1 - 0.8, deckTop - 0.5, 0]} />
+        {/* front section: a flat plate over the tractor's fifth wheel, the kingpin under it */}
+        <Box s={[x1 - NECK, 0.12, 2.1]} m={M.trailer} position={[(x1 + NECK) / 2, deckTop - 0.12, 0]} />
+        <Box s={[0.14, 0.36, 2.1]} m={M.trailer} position={[NECK, deckTop - 0.3, 0]} />
+        <Cyl r={0.05} l={0.1} m={M.steel} position={[KINGPIN, deckTop - 0.23, 0]} />
         {/* rear bumper and lamps */}
         <Box s={[0.12, 0.3, hz * 2]} m={M.mast} position={[x0 - 0.05, 0.9, 0]} />
         {[-1, 1].map((s) => (
@@ -469,22 +476,18 @@ function Truck() {
           <Box s={[0.4, 0.06, 0.4]} m={M.mast} position={[0, 0.03, 0]} />
         </group>
       ))}
-      {/* tractor unit */}
-      <group>
-        <Box s={[6, 0.35, 0.9]} m={M.mast} position={[h0 + 3, 0.95, 0]} />
-        <Box s={[1.6, 0.18, 2.0]} m={M.mast} position={[h0 + 0.6, 1.2, 0]} />
-        <Box s={[2.3, 2.5, 2.45]} r={0.08} m={M.cabWhite} position={[h0 + 4.75, 2.45, 0]} />
-        <Box s={[0.05, 1.0, 2.1]} m={M.glassDark} position={[h0 + 5.91, 2.9, 0]} />
-        <Box s={[0.08, 0.6, 1.6]} m={M.mast} position={[h0 + 5.92, 1.65, 0]} />
-        <Box s={[0.25, 0.32, 2.5]} m={M.mast} position={[h0 + 5.95, 0.95, 0]} />
-        <Box s={[2.3, 0.4, 2.47]} m={M.cab} position={[h0 + 4.75, 1.4, 0]} />
-        <Cyl r={0.3} l={1.2} axis="x" m={M.steel} position={[h0 + 2.6, 0.95, 1.1]} />
-        <Cyl r={0.09} l={2.8} m={M.mast} position={[h0 + 3.55, 2.6, -1.0]} />
-        {[h0 + 5, h0 + 1.6, h0 + 0.3].map((x, i) =>
-          [-1, 1].map((s) => (i === 0 ? [1.05] : [0.66, 1.0]).map((zz) => <Wheel key={`${x}${s}${zz}`} x={x} z={s * zz} />)),
-        )}
-      </group>
       </Bake>
+      {/* tractor unit: 6×4 cab-over head (truck kit, forward is +x here), kingpin over its fifth wheel */}
+      <group position={[TRUCK.headX1 - 1.3, 0, 0]} rotation={[0, Math.PI / 2, 0]}>
+        <KitMesh
+          build={(k) => {
+            buildCab(k, HEAD_LIVERY);
+            buildChassis(k, { end: -5.4, rear: [-3.4, -4.7], fuelZ: -2.0, batteryZ: -1.9 });
+            buildFifthWheel(k, { end: -5.4, rear: [-3.4, -4.7] });
+            kitWheels(k, [-3.4, -4.7]);
+          }}
+        />
+      </group>
     </group>
   );
 }

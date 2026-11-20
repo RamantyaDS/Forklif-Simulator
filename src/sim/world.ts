@@ -13,7 +13,7 @@ export const GENSET = CARGOS.genset;
 export const LOAD: CargoDef = { ...CARGOS.genset };
 
 // Flatbed semi-trailer, deck 13 m × 2.5 m, deck top 1.55 m; the tractor unit at +x.
-export const TRUCK = { x0: -9, x1: 4, hz: 1.25, deckTop: 1.55, deckT: 0.2, headX0: 4.6, headX1: 10.6, headH: 3.6 };
+export const TRUCK = { x0: -9, x1: 4, hz: 1.25, deckTop: 1.55, deckT: 0.2, headX0: 4.0, headX1: 8.5, headH: 3.6 };
 export const TIMBER = { t: 0.2, w: 0.2, l: 2.4 }; // hardwood blocks laid across under a load
 
 /** Where the load starts (bottom centre) and where it must go. */
