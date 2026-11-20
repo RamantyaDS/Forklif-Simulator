@@ -10,6 +10,7 @@ import { JOB } from './jobs';
 import { pickDefects } from './p2h';
 import { CONVERTER, SPEC, capacityAt, maxTorque } from './spec';
 import { CARGO_START, CONES, DYNAMIC, LOAD, OBSTACLES, PAD, START, supportAt } from './world';
+import { EMBED } from '../embed';
 
 const GENSET = LOAD; // the current job's load (kept short: it is used everywhere below)
 
@@ -279,7 +280,7 @@ export function hitAt(f: Forklift, x: number, z: number, heading: number): strin
   const mine = truckBoxes(f, x, z, heading);
   const carried = f.cargo.state === 'forks' ? cargoBox(f, x, z, heading) : null;
   if (carried) mine.push(carried);
-  const others = [...OBSTACLES, ...DYNAMIC];
+  const others = [...OBSTACLES, ...DYNAMIC, ...EMBED.solids];
   const resting = f.cargo.state === 'rest' || f.cargo.state === 'fallen' ? cargoBox(f) ?? fallenBox(f) : null;
   if (resting) others.push(resting);
   for (const a of mine) for (const b of others) if (overlaps(a, b)) return b.id ?? 'obstacle';
