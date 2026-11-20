@@ -2,6 +2,7 @@
 // to the horn, and turn back when it blocks their way), and a terminal tractor with a 40 ft container on a skeletal
 // chassis circling the south lanes, yielding to the forklift. Their boxes go into DYNAMIC so the forklift can hit them.
 import { footprint, type Forklift } from './forklift';
+import { EMBED } from '../embed';
 import { overlaps, type Obb } from './geom';
 import { DYNAMIC } from './world';
 
@@ -86,7 +87,7 @@ export function stepTraffic(f: Forklift, dt: number) {
   const moving = Math.abs(f.v) > 0.15;
   for (const w of WORKERS) {
     const near: Obb = { x: w.x, z: w.z, hx: 3.2, hz: 3.2, yaw: 0, y0: 0, y1: 2 };
-    const close = fp.some((b) => overlaps(b, near));
+    const close = fp.some((b) => overlaps(b, near)) || EMBED.solids.some((b) => overlaps(b, near));
     const hornNear = f.horn && Math.hypot(w.x - f.x, w.z - f.z) < 18;
     if (close || hornNear) {
       if (!w.stopped) w.stopped = true;
@@ -126,7 +127,7 @@ export function stepTraffic(f: Forklift, dt: number) {
   // the terminal tractor yields when the forklift is in its way (up to 14 m ahead)
   const ahead = yardBoxes(YARD.s + 7)[0];
   ahead.hz += 7;
-  const block = fp.some((b) => overlaps(b, ahead, -0.5));
+  const block = [...fp, ...EMBED.solids].some((b) => overlaps(b, ahead, -0.5));
   const want = block ? 0 : 5;
   YARD.v += Math.sign(want - YARD.v) * Math.min(Math.abs(want - YARD.v), dt * (block ? 4 : 1.2));
   YARD.stopped = block;

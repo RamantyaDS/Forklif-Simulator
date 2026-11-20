@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { create, setDir, startEngine, step, type Forklift } from './forklift';
+import { EMBED } from '../embed';
+import { create, forksClear, setDir, startEngine, step, type Forklift } from './forklift';
 import { SPEC, capacityAt } from './spec';
 import { CARGO_START, PAD, TRUCK } from './world';
 
@@ -180,5 +181,52 @@ describe('Toyota 4FD240', () => {
     run(f, 6, (f) => (f.liftLever = -1));
     expect(f.cargo.state).toBe('rest');
     expect(f.cargo.y).toBeCloseTo(0.2, 2);
+  });
+
+  it('sets the genset down on a Traknus World truck deck, draws the forks out, and lifts it off again', () => {
+    const f = underGenset();
+    run(f, 1.5, (f) => {
+      f.pedal = 0.6;
+      f.liftLever = 1;
+    });
+    run(f, 2, (f) => (f.tiltLever = 1));
+    expect(f.cargo.state).toBe('forks');
+    // the world's truck parked lengthwise along x at (200, 200): solid deck, deck and timber surfaces
+    const T = { x: 200, z: 200 };
+    const box = (x: number, hx: number, hz: number, y0: number, y1: number) => ({ id: 'truk', x, z: T.z, hx, hz, yaw: 0, y0, y1 });
+    EMBED.solids.push(box(T.x, 3.3, 1.25, 0.15, 1.38));
+    EMBED.supports.push(box(T.x, 3.15, 1.2, 1.18, 1.38), box(T.x - 2.6, 0.15, 1.2, 1.38, 1.58), box(T.x + 2.6, 0.15, 1.2, 1.38, 1.58));
+    try {
+      // up against the deck side, forks over the deck, level, and down onto the timbers
+      f.x = T.x + 0.13;
+      f.z = T.z + TRUCK.hz + 0.02 + SPEC.loadDistance;
+      f.heading = Math.PI;
+      f.tiltLever = 0;
+      f.liftLever = 0;
+      f.tilt = 0;
+      run(f, 6, (f) => (f.liftLever = f.cargo.state === 'forks' || f.lift > 1.39 ? -1 : 0));
+      expect(f.cargo.state).toBe('rest');
+      expect(f.cargo.y).toBeCloseTo(1.58, 2);
+      expect(f.lift).toBeGreaterThan(1.37); // the forks stop on the deck between the timbers
+      // reverse out: the forks come free of the set
+      setDir(f, 'R');
+      run(f, 2.5, (f) => (f.pedal = 0.4));
+      expect(forksClear(f)).toBe(true);
+      expect(f.cargo.state).toBe('rest');
+      // back in under it and lift it off the deck again
+      f.pedal = 0;
+      f.x = T.x + 0.13;
+      f.z = T.z + TRUCK.hz + 0.02 + SPEC.loadDistance;
+      f.v = 0;
+      setDir(f, 'F');
+      run(f, 1.5, (f) => {
+        f.pedal = 0.6;
+        f.liftLever = 1;
+      });
+      expect(f.cargo.state).toBe('forks');
+    } finally {
+      EMBED.solids.length = 0;
+      EMBED.supports.length = 0;
+    }
   });
 });
