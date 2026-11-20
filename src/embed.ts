@@ -16,7 +16,8 @@ export interface Solid {
   y1: number;
 }
 
-export const EMBED = { on: false, input: true, solids: [] as Solid[] };
+/** `supports`: world surfaces a load may be set down on (the truck's deck); the top is y1. */
+export const EMBED = { on: false, input: true, solids: [] as Solid[], supports: [] as Solid[] };
 
 /** The first world solid a box overlaps (separating-axis test on the ground plan, plus the height ranges). */
 export function hitsSolid(b: Omit<Solid, 'id'>): Solid | null {

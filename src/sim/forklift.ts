@@ -415,6 +415,12 @@ function forkFloor(f: Forklift, lift: number) {
   return worst; // ≥ 0 when clear
 }
 
+/** The forks are out from under the resting load. */
+export function forksClear(f: Forklift) {
+  const u = underCargo(f);
+  return !u.both && !u.one;
+}
+
 /** How the forks sit under a resting genset: how much of each fork is under it, and the fork top under its CG. */
 function underCargo(f: Forklift) {
   const c = f.cargo;

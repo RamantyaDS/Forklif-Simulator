@@ -124,6 +124,7 @@ export function supportAt(x: number, z: number) {
   if (inside(DECK, x, z)) h = TRUCK.deckTop;
   for (const t of TIMBERS) if (inside(t, x, z)) h = Math.max(h, t.y1);
   for (const s of SUPPORTS) if (inside(s, x, z)) h = Math.max(h, s.y1);
+  for (const s of EMBED.supports) if (inside(s, x, z)) h = Math.max(h, s.y1);
   return h;
 }
 
