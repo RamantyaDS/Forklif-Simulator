@@ -40,12 +40,37 @@ function canonical(m: THREE.Material): THREE.Material {
   return c;
 }
 
+/** Bakes run one per frame: a scene with many of them would otherwise merge them all in one long frame. */
+const jobs = new Map<number, () => void>();
+let nextJob = 1;
+let pumping = false;
+function pump() {
+  const next = jobs.entries().next();
+  if (next.done) {
+    pumping = false;
+    return;
+  }
+  const [id, run] = next.value;
+  jobs.delete(id);
+  run();
+  requestAnimationFrame(pump);
+}
+function queueBake(run: () => void) {
+  const id = nextJob++;
+  jobs.set(id, run);
+  if (!pumping) {
+    pumping = true;
+    requestAnimationFrame(pump);
+  }
+  return id;
+}
+
 export function Bake({ children, shadows = true }: { children: ReactNode; shadows?: boolean }) {
   const ref = useRef<THREE.Group>(null);
   useLayoutEffect(() => {
     const root = ref.current!;
-    // wait a frame so drei helpers (RoundedBox, extrusions) have their final geometry
-    const id = requestAnimationFrame(() => {
+    // a frame later (in turn with the other bakes), so drei helpers (RoundedBox, extrusions) have their final geometry
+    const id = queueBake(() => {
       root.updateWorldMatrix(true, true);
       const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
       const groups = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; cast: boolean }>();
@@ -93,7 +118,7 @@ export function Bake({ children, shadows = true }: { children: ReactNode; shadow
       for (const m of done) m.visible = false;
     });
     return () => {
-      cancelAnimationFrame(id);
+      jobs.delete(id);
       for (const c of [...root.children]) if (c.userData.baked) root.remove(c);
     };
   }, [shadows]);
