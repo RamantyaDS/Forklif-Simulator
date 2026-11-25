@@ -5,7 +5,7 @@
 //
 // Truck ("body") frame: origin at the front axle centre on the ground, +z toward the forks, +x to the driver's left,
 // y up. World pose: (x, z) of that origin and `heading` (body +z → (sin h, cos h)).
-import { clamp, overlaps, toLocal, toWorld, type Obb } from './geom';
+import { clamp, depth, overlaps, toLocal, toWorld, type Obb } from './geom';
 import { JOB } from './jobs';
 import { pickDefects } from './p2h';
 import { CONVERTER, SPEC, capacityAt, maxTorque } from './spec';
@@ -229,11 +229,12 @@ export function carriageToBody(f: Forklift, lx: number, a: number, b: number) {
 /** Centre lines of the two forks, sideways from the truck's centre. */
 export const forkCentres = (f: Forklift) => [f.spread / 2 - SPEC.forkW / 2, -(f.spread / 2 - SPEC.forkW / 2)];
 
-function forkBox(f: Forklift, lx: number, x = f.x, z = f.z, heading = f.heading): Obb {
-  const heel = carriageToBody(f, lx, 0, 0);
-  const tip = carriageToBody(f, lx, SPEC.forkL, 0);
-  const tipTop = carriageToBody(f, lx, SPEC.forkL, SPEC.forkT);
-  const heelTop = carriageToBody(f, lx, 0, SPEC.forkT);
+/** A fork (or the piece of it from a0 to a1 along it) as a box: tilted, its height range spans its slope. */
+function forkBox(f: Forklift, lx: number, x = f.x, z = f.z, heading = f.heading, a0 = 0, a1 = SPEC.forkL): Obb {
+  const heel = carriageToBody(f, lx, a0, 0);
+  const tip = carriageToBody(f, lx, a1, 0);
+  const tipTop = carriageToBody(f, lx, a1, SPEC.forkT);
+  const heelTop = carriageToBody(f, lx, a0, SPEC.forkT);
   const [wx, wz] = toWorld(x, z, heading, lx, (heel.z + tip.z) / 2);
   return {
     id: 'fork',
@@ -261,7 +262,8 @@ function truckBoxes(f: Forklift, x: number, z: number, heading: number): Obb[] {
     box(0, back, front, SPEC.width / 2, 0.05, SPEC.guardH, 'body'),
     box(0, front, heel.z - 0.02, 0.9, 0.05, mastTop, 'mast'),
     box(0, heel.z - 0.36, heel.z, 1.45, heel.y + 0.03, heel.y + 1.35, 'carriage'),
-    ...forkCentres(f).map((lx) => forkBox(f, lx, x, z, heading)),
+    // each fork in four pieces, so a tilted fork's slope is followed (its heel low beside a deck, its tip over it)
+    ...forkCentres(f).flatMap((lx) => [0, 1, 2, 3].map((k) => forkBox(f, lx, x, z, heading, (k * SPEC.forkL) / 4, ((k + 1) * SPEC.forkL) / 4))),
   ];
 }
 
@@ -275,14 +277,37 @@ export function cargoBox(f: Forklift, x = f.x, z = f.z, heading = f.heading): Ob
   return { id: 'cargo', x: wx, z: wz, hx: GENSET.hx, hz: GENSET.hz, yaw: heading + c.yawRel, y0: o.y, y1: o.y + GENSET.h };
 }
 
-/** Would the truck at this pose hit anything? Returns the obstacle's id. */
-export function hitAt(f: Forklift, x: number, z: number, heading: number): string | null {
+/** The truck's own boxes at a pose (with the load it carries), and everything they may run into. */
+function boxesAt(f: Forklift, x: number, z: number, heading: number) {
   const mine = truckBoxes(f, x, z, heading);
   const carried = f.cargo.state === 'forks' ? cargoBox(f, x, z, heading) : null;
   if (carried) mine.push(carried);
   const others = [...OBSTACLES, ...DYNAMIC, ...EMBED.solids];
   const resting = f.cargo.state === 'rest' || f.cargo.state === 'fallen' ? cargoBox(f) ?? fallenBox(f) : null;
   if (resting) others.push(resting);
+  return { mine, others };
+}
+
+/** How deep the truck at this pose is into things, summed: a move that does not make it deeper is a way out. */
+function penetration(f: Forklift, x = f.x, z = f.z, heading = f.heading) {
+  const { mine, others } = boxesAt(f, x, z, heading);
+  let d = 0;
+  for (const a of mine) for (const b of others) d += depth(a, b);
+  return d;
+}
+
+/**
+ * Would a change (a move, lift or tilt, already applied when `after` runs) push the truck deeper into something?
+ * Already touching something (the truck parked against the forks, forks left tilted inside a set) never locks it:
+ * whatever leads out, or along, is allowed.
+ */
+function deeper(f: Forklift, x: number, z: number, heading: number, before: number) {
+  return penetration(f, x, z, heading) > before + 1e-5;
+}
+
+/** Would the truck at this pose hit anything? Returns the obstacle's id. */
+export function hitAt(f: Forklift, x: number, z: number, heading: number): string | null {
+  const { mine, others } = boxesAt(f, x, z, heading);
   for (const a of mine) for (const b of others) if (overlaps(a, b)) return b.id ?? 'obstacle';
   // fork pockets: a fork beside the pockets runs into the load's bottom rail
   const c = f.cargo;
@@ -490,6 +515,10 @@ function hydraulics(f: Forklift, dt: number) {
       // forks on the deck, a timber or the ground
       if (forkFloor(f, f.lift) > 0.003) f.events.push('forkTouch');
       next = f.lift;
+    } else if (mastBlocked(f, next)) {
+      // tilted back over a high deck: the fork heels come down on its edge
+      next = f.lift;
+      if (!f.msg && f.tilt > 0.02) say(f, 'Garpu mentok di tepi bak. Datarkan garpu dulu (tilt maju), baru turunkan.');
     }
     f.lift = next;
     f.pressure = staticBar * 0.9;
@@ -501,10 +530,13 @@ function hydraulics(f: Forklift, dt: number) {
     const rate = (3 * Math.PI) / 180;
     const next = clamp(f.tilt + tl * rate * Math.max(0.35, flow) * dt, -SPEC.tiltFwd, SPEC.tiltBack);
     const save = f.tilt;
+    const before = penetration(f);
     f.tilt = next;
     const u = underCargo(f);
-    if (forkFloor(f, f.lift) < 0) f.tilt = save;
-    else if (u.both && u.topAtCg >= f.cargo.y + GENSET.lift0) pickUp(f);
+    const pick = u.both && u.topAtCg >= f.cargo.y + GENSET.lift0;
+    // forks resting on something (a deck, its edge, the ground): the lift chains go slack and the carriage rides up
+    if ((forkFloor(f, f.lift) < 0 || (!pick && deeper(f, f.x, f.z, f.heading, before))) && !rideUp(f, before)) f.tilt = save;
+    else if (pick) pickUp(f);
     else if (u.one && u.topAtCg >= f.cargo.y + GENSET.lift0) f.tilt = save;
   }
 
@@ -522,13 +554,25 @@ function hydraulics(f: Forklift, dt: number) {
   f.hydFlow = Math.max(lever > 0.02 ? lever : 0, Math.abs(tl) * 0.5, Math.abs(sl) * 0.4, f.relief ? 1 : 0) * (on ? 1 : 0);
 }
 
+/** Tilting with the forks resting on something: lift the carriage by the little it takes to stay on top (≤ 8 cm). */
+function rideUp(f: Forklift, before: number) {
+  const save = f.lift;
+  for (let k = 1; k <= 16; k++) {
+    f.lift = Math.min(SPEC.maxLift, save + k * 0.005);
+    if (forkFloor(f, f.lift) >= 0 && !deeper(f, f.x, f.z, f.heading, before)) return true;
+  }
+  f.lift = save;
+  return false;
+}
+
 /** Raising the mast: the carriage or forks must not run into anything (the deck from below, the genset from the side). */
 function mastBlocked(f: Forklift, lift: number) {
+  const before = penetration(f);
   const save = f.lift;
   f.lift = lift;
-  const hit = hitAt(f, f.x, f.z, f.heading);
+  const hit = deeper(f, f.x, f.z, f.heading, before);
   f.lift = save;
-  return !!hit;
+  return hit;
 }
 
 function pickUp(f: Forklift) {
@@ -751,7 +795,12 @@ function drive(f: Forklift, dt: number) {
   const nh = f.heading + yawRate * dt;
   const nx = f.x + Math.sin(f.heading) * v * dt;
   const nz = f.z + Math.cos(f.heading) * v * dt;
-  const hit = v !== 0 || yawRate !== 0 ? hitAt(f, nx, nz, nh) : null;
+  let hit = v !== 0 || yawRate !== 0 ? hitAt(f, nx, nz, nh) : null;
+  // already touching it: backing out (or anything that goes no deeper) is free
+  if (hit) {
+    const now = penetration(f);
+    if (now > 0 && !deeper(f, nx, nz, nh, now)) hit = null;
+  }
   // forks dragging along whatever they rest on; tyres at the grip limit
   f.scrape = Math.abs(v) > 0.15 && forkFloor(f, f.lift) < 0.01 ? Math.min(1, Math.abs(v) / 2.5) : 0;
   const lateral = Math.abs(v * yawRate);

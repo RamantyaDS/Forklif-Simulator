@@ -41,6 +41,22 @@ export function overlaps(a: Obb, b: Obb, margin = 0) {
   return true;
 }
 
+/** How deep two boxes overlap: the smallest push (in plan or in height) that separates them; 0 when apart. */
+export function depth(a: Obb, b: Obb) {
+  let d = Math.min(a.y1 - b.y0, b.y1 - a.y0);
+  if (d <= 0) return 0;
+  for (const box of [a, b]) {
+    const { ax, az } = axes(box);
+    for (const [nx, nz] of [ax, az]) {
+      const [a0, a1] = project(a, nx, nz);
+      const [b0, b1] = project(b, nx, nz);
+      d = Math.min(d, a1 - b0, b1 - a0);
+      if (d <= 0) return 0;
+    }
+  }
+  return d;
+}
+
 /** Point inside a box in plan view. */
 export function inside(b: Obb, x: number, z: number, pad = 0) {
   const { ax, az } = axes(b);
